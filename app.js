@@ -374,7 +374,50 @@
     });
     return result;
   }
-  function saveData(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){} }
+  var SUPABASE_URL = 'https://cbrcvrvwndxudgzeiqih.supabase.co';
+  var SUPABASE_KEY = 'sb_publishable_1I9f0iPUhVy4tPAIh3dPIg_ivkCfA9x';
+
+  function pushToSupabase(snapshot) {
+    if (!window.fetch) return;
+    fetch(SUPABASE_URL + '/rest/v1/boussole_data', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY,
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify({ id: 'main', data: snapshot, updated_at: new Date().toISOString() })
+    }).catch(function(){});
+  }
+
+  function syncFromSupabase() {
+    if (!window.fetch) return;
+    if (sessionStorage.getItem('supa_synced')) return;
+    sessionStorage.setItem('supa_synced', '1');
+    fetch(SUPABASE_URL + '/rest/v1/boussole_data?id=eq.main&select=data', {
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY
+      }
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(rows){
+      if (!rows || !rows.length || !rows[0].data) return;
+      var remoteStr = JSON.stringify(rows[0].data);
+      var localStr = localStorage.getItem(STORE_KEY) || '{}';
+      if (remoteStr !== localStr) {
+        localStorage.setItem(STORE_KEY, remoteStr);
+        window.location.reload();
+      }
+    })
+    .catch(function(){});
+  }
+
+  function saveData(){
+    try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){}
+    pushToSupabase(JSON.parse(JSON.stringify(state)));
+  }
 
   // ============ ANNULATION APRÈS SUPPRESSION (filet de sécurité générique, partout dans l'app) ============
   // getArray() retourne le tableau cible (ex: () => state.tasks), pour rester correct même pour des
@@ -430,6 +473,7 @@
 
   var state = loadData();
   if(!state.pillars || !state.pillars.length) state.pillars = ['familial','social','professionnel','personnel'];
+  syncFromSupabase();
 
   function pad2(n){ return n<10 ? '0'+n : ''+n; }
   function dateKey(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
