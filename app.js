@@ -3786,30 +3786,37 @@
   });
 
   // ============ GÉOLOCALISATION ============
+  var GEO_ANCHOR_KEY = 'boussole_geo_anchor';
+  // Ancre persistée en localStorage pour survivre aux suspensions iOS
   var _geo = { anchorLat: null, anchorLng: null, anchorTime: null, prompted: false };
   var _pendingGeoLat = null, _pendingGeoLng = null;
-  var _geoBackdrop    = document.getElementById('geo-backdrop');
-  var _geoNameInput   = document.getElementById('geo-name-input');
-  var _geoPillarSel   = document.getElementById('geo-pillar-select');
-  var _geoSaveCheck   = document.getElementById('geo-save-check');
-  var _geoPlaceHint   = document.getElementById('geo-place-hint');
-  var _geoTimeHint    = document.getElementById('geo-time-hint');
+  var _geoBackdrop   = document.getElementById('geo-backdrop');
+  var _geoNameInput  = document.getElementById('geo-name-input');
+  var _geoPillarSel  = document.getElementById('geo-pillar-select');
+  var _geoSaveCheck  = document.getElementById('geo-save-check');
+  var _geoPlaceHint  = document.getElementById('geo-place-hint');
+  var _geoTimeHint   = document.getElementById('geo-time-hint');
+  var _geoOpts       = { enableHighAccuracy: false, timeout: 10000, maximumAge: 30000 };
+
+  function saveGeoAnchor() {
+    try { localStorage.setItem(GEO_ANCHOR_KEY, JSON.stringify(_geo)); } catch(e) {}
+  }
+  function loadGeoAnchor() {
+    try {
+      var s = JSON.parse(localStorage.getItem(GEO_ANCHOR_KEY));
+      if (s && s.anchorLat) { _geo.anchorLat = s.anchorLat; _geo.anchorLng = s.anchorLng; _geo.anchorTime = s.anchorTime; _geo.prompted = s.prompted || false; }
+    } catch(e) {}
+  }
 
   function haversineM(lat1, lng1, lat2, lng2) {
-    var R = 6371000;
-    var dLat = (lat2 - lat1) * Math.PI / 180;
-    var dLng = (lng2 - lng1) * Math.PI / 180;
-    var a = Math.sin(dLat/2)*Math.sin(dLat/2) +
-            Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
-            Math.sin(dLng/2)*Math.sin(dLng/2);
+    var R = 6371000, dLat = (lat2-lat1)*Math.PI/180, dLng = (lng2-lng1)*Math.PI/180;
+    var a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)*Math.sin(dLng/2);
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   }
 
   function findKnownLocation(lat, lng) {
     var locs = state.knownLocations || [];
-    for (var i = 0; i < locs.length; i++) {
-      if (haversineM(lat, lng, locs[i].lat, locs[i].lng) <= 500) return locs[i];
-    }
+    for (var i = 0; i < locs.length; i++) { if (haversineM(lat, lng, locs[i].lat, locs[i].lng) <= 500) return locs[i]; }
     return null;
   }
 
@@ -3821,35 +3828,46 @@
     return 'Soirée';
   }
 
+  // ---- Notifications ----
+  function requestNotifPermission() {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }
+
+  function sendNotif(title, body) {
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    try { new Notification(title, { body: body, tag: 'boussole-geo', icon: '/boussole/icon-192.png' }); } catch(e) {}
+  }
+
+  // ---- Création bloc ----
   function createGeoBlock(name, pillarId) {
     var startMs = _geo.anchorTime || (Date.now() - 5 * 60000);
     var startDate = new Date(startMs);
-    var duration = Math.round((Date.now() - startMs) / 60000);
-    duration = Math.max(30, Math.min(duration, 480));
+    var duration = Math.max(30, Math.min(Math.round((Date.now() - startMs) / 60000), 480));
     state.blocks.push({
-      id: 'b_geo_' + Date.now(),
-      pillarId: pillarId,
-      title: name,
-      date: dateKey(startDate),
-      endDate: null,
-      startHour: startDate.getHours(),
-      startMinute: startDate.getMinutes(),
-      durationMinutes: duration,
-      goalId: null,
-      isSleepBlock: false,
-      isLunchBlock: false
+      id: 'b_geo_' + Date.now(), pillarId: pillarId, title: name,
+      date: dateKey(startDate), endDate: null,
+      startHour: startDate.getHours(), startMinute: startDate.getMinutes(),
+      durationMinutes: duration, goalId: null, isSleepBlock: false, isLunchBlock: false
     });
+    _geo.prompted = true;
+    saveGeoAnchor();
     saveData();
     renderAgenda();
+    sendNotif('📍 ' + name, 'Bloc ajouté · ' + geoPlageLabel() + ' · ' + duration + ' min');
   }
 
+  // ---- Modal ----
   function openGeoModal(lat, lng, suggestedName) {
     _pendingGeoLat = lat; _pendingGeoLng = lng;
     _geoNameInput.value = suggestedName || '';
     _geoPlaceHint.textContent = suggestedName ? 'Lieu détecté : ' + suggestedName : 'Lieu inconnu';
-    _geoTimeHint.textContent = 'Tu es là depuis ~5 min · ' + geoPlageLabel();
+    _geoTimeHint.textContent = 'Depuis ' + (Math.round((Date.now() - _geo.anchorTime) / 60000)) + ' min · ' + geoPlageLabel();
     _geoBackdrop.style.display = 'flex';
     _geo.prompted = true;
+    saveGeoAnchor();
+    sendNotif('📍 Nouveau lieu détecté', suggestedName || 'Tu es là depuis ' + Math.round((Date.now()-_geo.anchorTime)/60000) + ' min. Ouvre Boussole pour ajouter.');
   }
 
   function closeGeoModal() { _geoBackdrop.style.display = 'none'; }
@@ -3860,11 +3878,9 @@
     var pillar = _geoPillarSel.value;
     if (_geoSaveCheck.checked && _pendingGeoLat !== null) {
       if (!state.knownLocations) state.knownLocations = [];
-      // Mettre à jour si le lieu existe déjà (même coordonnées), sinon ajouter
       var existing = findKnownLocation(_pendingGeoLat, _pendingGeoLng);
       if (existing) { existing.name = name; existing.pillarId = pillar; }
       else state.knownLocations.push({ id: 'loc_' + Date.now(), name: name, lat: _pendingGeoLat, lng: _pendingGeoLng, pillarId: pillar });
-      saveData();
     }
     createGeoBlock(name, pillar);
     closeGeoModal();
@@ -3872,45 +3888,50 @@
   document.getElementById('geo-cancel-btn').addEventListener('click', closeGeoModal);
   _geoBackdrop.addEventListener('click', function(e) { if (e.target === _geoBackdrop) closeGeoModal(); });
 
+  // ---- Geocodage inverse ----
   function reverseGeocode(lat, lng, cb) {
     fetch('https://nominatim.openstreetmap.org/reverse?lat=' + lat + '&lon=' + lng + '&format=json', {
       headers: { 'Accept-Language': 'fr', 'User-Agent': 'BoussoleLifeOS/1.0' }
     })
     .then(function(r) { return r.json(); })
-    .then(function(d) {
-      var a = d.address || {};
-      cb(a.amenity || a.leisure || a.building || a.road || a.suburb || a.city_district || a.city || '');
-    })
+    .then(function(d) { var a = d.address||{}; cb(a.amenity||a.leisure||a.building||a.road||a.suburb||a.city_district||a.city||''); })
     .catch(function() { cb(''); });
   }
 
+  // ---- Logique principale ----
   function onGeoPosition(pos) {
     var lat = pos.coords.latitude, lng = pos.coords.longitude;
     if (_geo.anchorLat === null) {
-      _geo.anchorLat = lat; _geo.anchorLng = lng; _geo.anchorTime = Date.now();
-      return;
+      _geo.anchorLat = lat; _geo.anchorLng = lng; _geo.anchorTime = Date.now(); _geo.prompted = false;
+      saveGeoAnchor(); return;
     }
     if (haversineM(lat, lng, _geo.anchorLat, _geo.anchorLng) > 1000) {
+      // Déplacement significatif → nouvelle ancre
       _geo.anchorLat = lat; _geo.anchorLng = lng; _geo.anchorTime = Date.now(); _geo.prompted = false;
-      return;
+      saveGeoAnchor(); return;
     }
+    // Même zone — vérifier les 5 minutes
     if ((Date.now() - _geo.anchorTime) >= 5 * 60 * 1000 && !_geo.prompted) {
       var known = findKnownLocation(lat, lng);
-      if (known) {
-        createGeoBlock(known.name, known.pillarId);
-        _geo.prompted = true;
-      } else {
-        reverseGeocode(lat, lng, function(name) { openGeoModal(lat, lng, name); });
-      }
+      if (known) { createGeoBlock(known.name, known.pillarId); }
+      else { reverseGeocode(lat, lng, function(name) { openGeoModal(lat, lng, name); }); }
     }
+  }
+
+  function geoCheck() {
+    if (!navigator.geolocation || !state.geoTrackingEnabled) return;
+    navigator.geolocation.getCurrentPosition(onGeoPosition, function(){}, _geoOpts);
   }
 
   function startLocationTracking() {
     if (!navigator.geolocation || !state.geoTrackingEnabled) return;
-    var opts = { enableHighAccuracy: false, timeout: 10000, maximumAge: 30000 };
-    function check() { navigator.geolocation.getCurrentPosition(onGeoPosition, function(){}, opts); }
-    setTimeout(check, 15000);
-    setInterval(check, 60000);
+    loadGeoAnchor(); // restaurer l'ancre depuis localStorage (survie aux suspensions iOS)
+    setTimeout(geoCheck, 5000);   // premier check rapide
+    setInterval(geoCheck, 60000); // puis toutes les minutes si app au premier plan
+    // Vérification immédiate à chaque retour au premier plan (slide-up → retour app)
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden) { loadGeoAnchor(); setTimeout(geoCheck, 1000); }
+    });
   }
 
   // ============ INIT ============
@@ -3920,4 +3941,5 @@
   applyCustomization();
   setInterval(renderExportReminder, 60*1000);
   startLocationTracking();
+  requestNotifPermission();
 })();
