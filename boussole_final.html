@@ -1628,7 +1628,10 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     .then(function(r){ return r.json(); })
     .then(function(rows){
       if (!rows || !rows.length || !rows[0].data) return;
-      var remoteStr = JSON.stringify(rows[0].data);
+      var remote = rows[0].data;
+      // Ignorer un state vide (table initialisée sans données réelles)
+      if (!remote.tasks && !remote.goals && !remote.blocks && !remote.recurring) return;
+      var remoteStr = JSON.stringify(remote);
       var localStr = localStorage.getItem(STORE_KEY) || '{}';
       if (remoteStr !== localStr) {
         localStorage.setItem(STORE_KEY, remoteStr);
