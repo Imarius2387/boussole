@@ -682,6 +682,31 @@
   </p>
 </div>
 
+  <div class="block-modal-backdrop" id="geo-backdrop" style="display:none;">
+    <div class="block-modal">
+      <p class="section-title" style="margin-bottom:6px;">📍 Où te trouves-tu ?</p>
+      <p class="found-hint" id="geo-place-hint" style="margin-top:0;margin-bottom:4px;"></p>
+      <p class="found-hint" id="geo-time-hint" style="margin-top:0;margin-bottom:14px;font-size:12px;opacity:0.7;"></p>
+      <span class="found-label">Nom du lieu</span>
+      <input type="text" class="found-input" id="geo-name-input" placeholder="Ex : Salle de sport, Bibliothèque…" style="margin-bottom:12px;">
+      <span class="found-label">Pilier</span>
+      <select class="found-input" id="geo-pillar-select" style="margin-bottom:14px;">
+        <option value="professionnel">Professionnel</option>
+        <option value="personnel">Personnel</option>
+        <option value="familial">Familial</option>
+        <option value="social">Social</option>
+      </select>
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;cursor:pointer;">
+        <input type="checkbox" id="geo-save-check" checked>
+        <span class="found-hint" style="margin:0;">Mémoriser ce lieu pour la prochaine fois</span>
+      </label>
+      <div class="goal-form-row">
+        <button class="btn primary" id="geo-confirm-btn" style="flex:1;justify-content:center;"><i class="ti ti-check"></i> Ajouter à l'agenda</button>
+        <button class="btn ghost sm" id="geo-cancel-btn">Ignorer</button>
+      </div>
+    </div>
+  </div>
+
 <div id="undo-toast" class="undo-toast" style="display:none;">
   <span id="undo-toast-text"></span>
   <button class="btn primary sm" id="undo-toast-btn">Annuler</button>

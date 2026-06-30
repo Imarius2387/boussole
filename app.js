@@ -278,7 +278,9 @@
         incomes: [],              // {id, label, amount}
         expenses: [],             // {id, label, amount}
         savingsGoals: []          // {id, name, cost, createdAt}
-      }
+      },
+      knownLocations: [],         // {id, name, lat, lng, pillarId} — lieux mémorisés par la géolocalisation
+      geoTrackingEnabled: true
     };
   }
   var SEED_DATA = {"tasks": [{"id": "t17817144179090000", "text": "Appeler le coach (Entente sportive Étoile Martin) pour trancher : rester ou arrêter le club", "importance": 3, "effort": 1, "pillar": "social", "done": false, "doneAt": null, "createdAt": 1781712677909}, {"id": "t17817144179090001", "text": "Faire le point avec Jules sur les attendus du CAPEPS interne, notamment l'écrit", "importance": 3, "effort": 2, "pillar": "professionnel", "done": false, "doneAt": null, "createdAt": 1781712737909}, {"id": "t17817144179090002", "text": "S'inscrire au CAPEPS pour l'année prochaine", "importance": 3, "effort": 1, "pillar": "professionnel", "done": false, "doneAt": null, "createdAt": 1781712797909}, {"id": "t17817144179090003", "text": "Anticiper les cours et la préparation pour la 3e année entraînement sportif", "importance": 2, "effort": 3, "pillar": "professionnel", "done": false, "doneAt": null, "createdAt": 1781712857909}, {"id": "t17817144179090004", "text": "Voir avec Jules pour l'échange de poste au lycée Raoul de Tréa Limoges", "importance": 2, "effort": 1, "pillar": "professionnel", "done": false, "doneAt": null, "createdAt": 1781712917909}, {"id": "t17817144179090005", "text": "Calculer mes dépenses et les recalibrer pour l'année prochaine selon mes revenus", "importance": 3, "effort": 2, "pillar": "professionnel", "done": false, "doneAt": null, "createdAt": 1781712977909}, {"id": "t17817144179090006", "text": "Réfléchir à une deuxième source de revenus via l'achat-revente", "importance": 2, "effort": 2, "pillar": "professionnel", "done": false, "doneAt": null, "createdAt": 1781713037909}, {"id": "t17817144179090007", "text": "Appeler mes grands-parents pour le séjour d'été avec mon frère", "importance": 2, "effort": 1, "pillar": "familial", "done": false, "doneAt": null, "createdAt": 1781713097909}, {"id": "t17817144179090008", "text": "Anticiper l'appartement pour la poursuite d'études de mon frère", "importance": 2, "effort": 2, "pillar": "familial", "done": false, "doneAt": null, "createdAt": 1781713157909}, {"id": "t17817144179090009", "text": "Anticiper mes voyages de l'année à venir", "importance": 2, "effort": 2, "pillar": "personnel", "done": false, "doneAt": null, "createdAt": 1781713217909}, {"id": "t17817144179090010", "text": "Envoyer un message à Naty pour le décès de son frère", "importance": 3, "effort": 1, "pillar": "social", "done": false, "doneAt": null, "createdAt": 1781713277909}, {"id": "t17817144179090011", "text": "Préparer le cadeau pour l'anniversaire d'Aeva (20 juin)", "importance": 2, "effort": 1, "pillar": "social", "done": false, "doneAt": null, "createdAt": 1781713337909}, {"id": "t17817144179090012", "text": "Programmer les vacances entre amis", "importance": 2, "effort": 2, "pillar": "social", "done": false, "doneAt": null, "createdAt": 1781713397909}, {"id": "t17817144179090013", "text": "Voir la réservation des vacances avec les copains (Ferias de Céret, mobil-home jusqu'au 12)", "importance": 2, "effort": 2, "pillar": "social", "done": false, "doneAt": null, "createdAt": 1781713457909}, {"id": "t17817144179090014", "text": "Anticiper les places pour les Déferlantes au Bar Caresses", "importance": 1, "effort": 1, "pillar": "social", "done": false, "doneAt": null, "createdAt": 1781713517909}, {"id": "t17817144179090015", "text": "Ranger et laver l'appartement", "importance": 2, "effort": 1, "pillar": "personnel", "done": false, "doneAt": null, "createdAt": 1781713577909}, {"id": "t17817144179090016", "text": "Faire un point essence avant le départ", "importance": 1, "effort": 1, "pillar": "personnel", "done": false, "doneAt": null, "createdAt": 1781713637909}, {"id": "t17817144179090017", "text": "Préparer les affaires pour le départ vendredi (Saint-Pardoux)", "importance": 2, "effort": 1, "pillar": "personnel", "done": false, "doneAt": null, "createdAt": 1781713697909}, {"id": "t17817144179090018", "text": "Acheter un iPhone (nécessaire pour iOS 18 et Synaptique)", "importance": 2, "effort": 2, "pillar": "personnel", "done": false, "doneAt": null, "createdAt": 1781713757909}, {"id": "t17817144179090019", "text": "Acheter des vêtements : caleçons, chaussettes, chaussures", "importance": 1, "effort": 2, "pillar": "personnel", "done": false, "doneAt": null, "createdAt": 1781713817909}, {"id": "t17817144179090020", "text": "Acheter un disque dur pour sauvegarder photos et travail", "importance": 2, "effort": 1, "pillar": "personnel", "done": false, "doneAt": null, "createdAt": 1781713877909}, {"id": "t17817144179090021", "text": "Changer le verre trempé du téléphone", "importance": 1, "effort": 1, "pillar": "personnel", "done": false, "doneAt": null, "createdAt": 1781713937909}, {"id": "t17817144179090022", "text": "Acheter des bouteilles d'eau en verre", "importance": 1, "effort": 1, "pillar": "personnel", "done": false, "doneAt": null, "createdAt": 1781713997909}, {"id": "t17817144179090023", "text": "Acheter de l'eau en pack + sel/électrolytes à ajouter", "importance": 1, "effort": 1, "pillar": "personnel", "done": false, "doneAt": null, "createdAt": 1781714057909}, {"id": "t17817144179090024", "text": "Faire les courses : feuilles, lessive, fromage blanc", "importance": 1, "effort": 1, "pillar": "personnel", "done": false, "doneAt": null, "createdAt": 1781714117909}, {"id": "t17817144179090025", "text": "Trier les photos du téléphone dans un dossier de sauvegarde", "importance": 2, "effort": 2, "pillar": "personnel", "done": false, "doneAt": null, "createdAt": 1781714177909}, {"id": "t17817144179090026", "text": "Réfléchir au transport pour l'année prochaine (achat voiture ?)", "importance": 2, "effort": 2, "pillar": "personnel", "done": false, "doneAt": null, "createdAt": 1781714237909}, {"id": "t17817144179090027", "text": "Repenser l'alimentation pour l'année à venir", "importance": 2, "effort": 2, "pillar": "personnel", "done": false, "doneAt": null, "createdAt": 1781714297909}, {"id": "t17817144179090028", "text": "Partager en ligne la musique que j'ai créée", "importance": 2, "effort": 1, "pillar": "personnel", "done": false, "doneAt": null, "createdAt": 1781714357909}], "energy": 2, "pillars": ["familial", "social", "professionnel", "personnel"], "vision": "", "allocations": {"familial": 15, "social": 20, "professionnel": 40, "personnel": 25}, "blocks": [{"id": "b17817144179090000", "pillarId": "familial", "title": "Retour chez mes parents", "date": "2026-06-18", "endDate": null, "startHour": 17, "goalId": null, "durationMinutes": 180, "startMinute": 0}, {"id": "b17817144179090001", "pillarId": "social", "title": "Week-end club de foot — Saint-Pardoux", "date": "2026-06-20", "endDate": "2026-06-21", "startHour": 8, "goalId": null, "durationMinutes": 240, "startMinute": 0}, {"id": "b17817144179090002", "pillarId": "social", "title": "Île de Ré", "date": "2026-06-26", "endDate": "2026-06-29", "startHour": 9, "goalId": null, "durationMinutes": 240, "startMinute": 0}, {"id": "b17817144179090003", "pillarId": "social", "title": "Fête à Crocq (Creuse)", "date": "2026-07-03", "endDate": "2026-07-05", "startHour": 9, "goalId": null, "durationMinutes": 240, "startMinute": 0}, {"id": "b17817144179090004", "pillarId": "familial", "title": "Départ pour Céret avec mon frère", "date": "2026-07-06", "endDate": "2026-07-07", "startHour": 9, "goalId": null, "durationMinutes": 180, "startMinute": 0}, {"id": "b17817144179090005", "pillarId": "social", "title": "Ferias de Céret (+ copains qui rejoignent, mobil-home)", "date": "2026-07-10", "endDate": "2026-07-12", "startHour": 9, "goalId": null, "durationMinutes": 240, "startMinute": 0}], "recurring": [{"id": "r17817144179090000", "text": "Mobilité — 10 minutes", "pillarId": "personnel"}, {"id": "r17817144179090001", "text": "Hydratation — 2 à 3 litres dans la journée", "pillarId": "personnel"}, {"id": "r17817144179090002", "text": "Réveil : boire de l'eau + capsule de caféine, ne pas répéter le réveil, ne pas regarder le téléphone", "pillarId": "personnel"}, {"id": "r17817144179090003", "text": "Repos 30 min après le déjeuner", "pillarId": "personnel"}, {"id": "r17817144179090004", "text": "Canaliser le temps d'écran (4 points : matin / midi / après-midi / soir), sinon mode Ne pas déranger", "pillarId": "personnel"}, {"id": "r17817144179090005", "text": "Passer au moins un appel dans la journée", "pillarId": "social"}, {"id": "r17817144179090006", "text": "Résumer sa journée dans les notes", "pillarId": "personnel"}, {"id": "r17817144179090007", "text": "Lecture avant de se coucher", "pillarId": "personnel"}], "recurringLog": {}, "goals": [{"id": "g17817144179090000", "text": "Devenir préparateur physique — valider la licence entraînement sportif", "horizon": "long", "pillar": "professionnel", "createdAt": 1781713877909, "notes": "", "status": "todo"}, {"id": "g17817144179090001", "text": "Devenir professeur d'EPS — réussir le CAPEPS, viser un bon classement", "horizon": "long", "pillar": "professionnel", "createdAt": 1781713937909, "notes": "", "status": "todo"}, {"id": "g17817144179090002", "text": "Musculation — cap esthétique : prise de masse, atteindre 79 kg, volume pectoraux/bras", "horizon": "moyen", "pillar": "personnel", "createdAt": 1781713997909, "notes": "", "status": "todo"}, {"id": "g17817144179090003", "text": "Musculation — puissance bas du corps + renforcement sangle abdominale (complément foot)", "horizon": "moyen", "pillar": "personnel", "createdAt": 1781714057909, "notes": "", "status": "todo"}, {"id": "g17817144179090004", "text": "Refondre intelligemment le plan de révision CAPEPS pour l'année à venir", "horizon": "moyen", "pillar": "professionnel", "createdAt": 1781714117909, "notes": "", "status": "todo"}, {"id": "g17817144179090005", "text": "Développer une deuxième source de revenus (achat-revente)", "horizon": "moyen", "pillar": "professionnel", "createdAt": 1781714177909, "notes": "", "status": "todo"}, {"id": "g17817144179090007", "text": "Développer une recherche / thèse sur les théories de l'apprentissage et la mémoire", "horizon": "moyen", "pillar": "personnel", "createdAt": 1781714297909, "notes": "", "status": "todo"}, {"id": "g17817144179090008", "text": "Développer ma culture générale et suivre l'actualité au quotidien", "horizon": "moyen", "pillar": "personnel", "createdAt": 1781714357909, "notes": "", "status": "todo"}, {"id": "g2_17817198320232", "text": "Intégrer le Master 1/2 MEEF à Limoges (rentrée septembre 2027)", "horizon": "long", "pillar": "professionnel", "createdAt": 1781719682023, "notes": "", "status": "todo"}, {"id": "g2_17817198320233", "text": "Exercer comme préparateur physique indépendant (à domicile / cours particuliers) en parallèle du poste de fonctionnaire stagiaire, dès l'année prochaine", "horizon": "long", "pillar": "professionnel", "createdAt": 1781719712023, "notes": "", "status": "todo"}, {"id": "g2_17817198320234", "text": "Monter mon profil professionnel complet pour exercer en parallèle du statut de fonctionnaire stagiaire", "horizon": "long", "pillar": "professionnel", "createdAt": 1781719742023, "notes": "", "status": "todo"}, {"id": "g2_17817198320235", "text": "Partir un an à l'île de la Réunion (rentrée septembre 2028) pour voir si je m'y plais", "horizon": "long", "pillar": "professionnel", "createdAt": 1781719772023, "notes": "", "status": "todo"}, {"id": "g2_17817198320236", "text": "Revenir faire une année de titularisation dans la région (rentrée 2029), puis repartir et étudier à la Réunion via le CIMM, et acheter un appartement là-bas", "horizon": "long", "pillar": "professionnel", "createdAt": 1781719802023, "notes": "", "status": "todo"}], "finance": {"incomes": [], "expenses": [], "savingsGoals": [{"id": "sg_17817198320230", "name": "Van", "cost": 25000, "createdAt": 1781719772023}, {"id": "sg_17817198320231", "name": "Moto + permis A2", "cost": 6000, "createdAt": 1781719782023}, {"id": "sg_17817198320232", "name": "Vélo de course", "cost": 1500, "createdAt": 1781719792023}, {"id": "sg_17817198320233", "name": "VTT", "cost": 1200, "createdAt": 1781719802023}, {"id": "sg_17817198320234", "name": "Moto-cross", "cost": 4000, "createdAt": 1781719812023}, {"id": "sg_17817198320235", "name": "Voiture", "cost": 12000, "createdAt": 1781719822023}]}, "projects": [{"id": "p17817144179090006", "name": "Écrire mon livre", "pillar": "personnel", "status": "todo", "notes": "", "links": "", "createdAt": 1781714237909}, {"id": "p2_17817198320230", "name": "Devenir indépendant en musique / DJ : se former, commercialiser sa musique, acquérir le matériel (pad, setup son)", "pillar": "personnel", "status": "todo", "notes": "", "links": "", "createdAt": 1781719622023}, {"id": "p2_17817198320231", "name": "Commercialiser ma boisson naturelle Zinka", "pillar": "personnel", "status": "todo", "notes": "", "links": "", "createdAt": 1781719652023}]};
@@ -338,6 +340,8 @@
     if(!result.weekTypeAssignments) result.weekTypeAssignments = {};
     if(!result.weekProfiles) result.weekProfiles = [];
     if(!result.tasks) result.tasks = [];
+    if(!result.knownLocations) result.knownLocations = [];
+    if(typeof result.geoTrackingEnabled === 'undefined') result.geoTrackingEnabled = true;
     // Purge des anciens goals "court" terme : ils appartiennent désormais au système Tasks,
     // et l'utilisateur a demandé de repartir à zéro pour ce compartiment.
     if(result.goals) result.goals = result.goals.filter(function(g){ return g.horizon !== 'court'; });
@@ -3781,10 +3785,139 @@
     saveData(); nameInput.value=''; costInput.value=''; renderSavingsGoals();
   });
 
+  // ============ GÉOLOCALISATION ============
+  var _geo = { anchorLat: null, anchorLng: null, anchorTime: null, prompted: false };
+  var _pendingGeoLat = null, _pendingGeoLng = null;
+  var _geoBackdrop    = document.getElementById('geo-backdrop');
+  var _geoNameInput   = document.getElementById('geo-name-input');
+  var _geoPillarSel   = document.getElementById('geo-pillar-select');
+  var _geoSaveCheck   = document.getElementById('geo-save-check');
+  var _geoPlaceHint   = document.getElementById('geo-place-hint');
+  var _geoTimeHint    = document.getElementById('geo-time-hint');
+
+  function haversineM(lat1, lng1, lat2, lng2) {
+    var R = 6371000;
+    var dLat = (lat2 - lat1) * Math.PI / 180;
+    var dLng = (lng2 - lng1) * Math.PI / 180;
+    var a = Math.sin(dLat/2)*Math.sin(dLat/2) +
+            Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
+            Math.sin(dLng/2)*Math.sin(dLng/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  function findKnownLocation(lat, lng) {
+    var locs = state.knownLocations || [];
+    for (var i = 0; i < locs.length; i++) {
+      if (haversineM(lat, lng, locs[i].lat, locs[i].lng) <= 500) return locs[i];
+    }
+    return null;
+  }
+
+  function geoPlageLabel() {
+    var h = new Date().getHours();
+    if (h >= 6 && h < 12) return 'Matinée';
+    if (h >= 12 && h < 14) return 'Midi';
+    if (h >= 14 && h < 18) return 'Après-midi';
+    return 'Soirée';
+  }
+
+  function createGeoBlock(name, pillarId) {
+    var startMs = _geo.anchorTime || (Date.now() - 5 * 60000);
+    var startDate = new Date(startMs);
+    var duration = Math.round((Date.now() - startMs) / 60000);
+    duration = Math.max(30, Math.min(duration, 480));
+    state.blocks.push({
+      id: 'b_geo_' + Date.now(),
+      pillarId: pillarId,
+      title: name,
+      date: dateKey(startDate),
+      endDate: null,
+      startHour: startDate.getHours(),
+      startMinute: startDate.getMinutes(),
+      durationMinutes: duration,
+      goalId: null,
+      isSleepBlock: false,
+      isLunchBlock: false
+    });
+    saveData();
+    renderAgenda();
+  }
+
+  function openGeoModal(lat, lng, suggestedName) {
+    _pendingGeoLat = lat; _pendingGeoLng = lng;
+    _geoNameInput.value = suggestedName || '';
+    _geoPlaceHint.textContent = suggestedName ? 'Lieu détecté : ' + suggestedName : 'Lieu inconnu';
+    _geoTimeHint.textContent = 'Tu es là depuis ~5 min · ' + geoPlageLabel();
+    _geoBackdrop.style.display = 'flex';
+    _geo.prompted = true;
+  }
+
+  function closeGeoModal() { _geoBackdrop.style.display = 'none'; }
+
+  document.getElementById('geo-confirm-btn').addEventListener('click', function() {
+    var name = _geoNameInput.value.trim();
+    if (!name) { _geoNameInput.focus(); return; }
+    var pillar = _geoPillarSel.value;
+    if (_geoSaveCheck.checked && _pendingGeoLat !== null) {
+      if (!state.knownLocations) state.knownLocations = [];
+      // Mettre à jour si le lieu existe déjà (même coordonnées), sinon ajouter
+      var existing = findKnownLocation(_pendingGeoLat, _pendingGeoLng);
+      if (existing) { existing.name = name; existing.pillarId = pillar; }
+      else state.knownLocations.push({ id: 'loc_' + Date.now(), name: name, lat: _pendingGeoLat, lng: _pendingGeoLng, pillarId: pillar });
+      saveData();
+    }
+    createGeoBlock(name, pillar);
+    closeGeoModal();
+  });
+  document.getElementById('geo-cancel-btn').addEventListener('click', closeGeoModal);
+  _geoBackdrop.addEventListener('click', function(e) { if (e.target === _geoBackdrop) closeGeoModal(); });
+
+  function reverseGeocode(lat, lng, cb) {
+    fetch('https://nominatim.openstreetmap.org/reverse?lat=' + lat + '&lon=' + lng + '&format=json', {
+      headers: { 'Accept-Language': 'fr', 'User-Agent': 'BoussoleLifeOS/1.0' }
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var a = d.address || {};
+      cb(a.amenity || a.leisure || a.building || a.road || a.suburb || a.city_district || a.city || '');
+    })
+    .catch(function() { cb(''); });
+  }
+
+  function onGeoPosition(pos) {
+    var lat = pos.coords.latitude, lng = pos.coords.longitude;
+    if (_geo.anchorLat === null) {
+      _geo.anchorLat = lat; _geo.anchorLng = lng; _geo.anchorTime = Date.now();
+      return;
+    }
+    if (haversineM(lat, lng, _geo.anchorLat, _geo.anchorLng) > 1000) {
+      _geo.anchorLat = lat; _geo.anchorLng = lng; _geo.anchorTime = Date.now(); _geo.prompted = false;
+      return;
+    }
+    if ((Date.now() - _geo.anchorTime) >= 5 * 60 * 1000 && !_geo.prompted) {
+      var known = findKnownLocation(lat, lng);
+      if (known) {
+        createGeoBlock(known.name, known.pillarId);
+        _geo.prompted = true;
+      } else {
+        reverseGeocode(lat, lng, function(name) { openGeoModal(lat, lng, name); });
+      }
+    }
+  }
+
+  function startLocationTracking() {
+    if (!navigator.geolocation || !state.geoTrackingEnabled) return;
+    var opts = { enableHighAccuracy: false, timeout: 10000, maximumAge: 30000 };
+    function check() { navigator.geolocation.getCurrentPosition(onGeoPosition, function(){}, opts); }
+    setTimeout(check, 15000);
+    setInterval(check, 60000);
+  }
+
   // ============ INIT ============
   // Démarrer sur Équilibre — c'est le coeur de l'application
   switchToView('balance');
   renderExportReminder();
   applyCustomization();
   setInterval(renderExportReminder, 60*1000);
+  startLocationTracking();
 })();
