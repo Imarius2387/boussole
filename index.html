@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Boussole — Life OS v1</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.47.0/iconfont/tabler-icons.min.css">
+</head>
+<body>
+<div id="custom-background-layer"></div>
+<div id="custom-quote-layer"></div>
+<div class="wrap">
+
+  <div class="top">
+    <div class="brand">Boussole</div>
+    <div class="top-right">
+      <div class="date" id="today-date"></div>
+      <button class="personalize-btn" id="search-shortcut-btn" aria-label="Rechercher" title="Rechercher"></button>
+      <button class="personalize-btn" id="personalize-btn" aria-label="Personnaliser" title="Personnaliser"></button>
+    </div>
+  </div>
+
+  <div class="question" id="main-question">Que dois-je faire maintenant ?</div>
+  <p class="sub" id="main-sub">Note ce qui te passe par la tête, on s'occupe de l'ordre.</p>
+
+  <div class="tabs" id="main-tabs">
+    <button class="tab active" data-view="balance"><i class="ti ti-compass"></i> Équilibre</button>
+    <button class="tab" data-view="now"><i class="ti ti-bolt"></i> Maintenant</button>
+    <button class="tab" data-view="today"><i class="ti ti-calendar-event"></i> Aujourd'hui</button>
+    <button class="tab" data-view="week"><i class="ti ti-calendar-week"></i> Semaine</button>
+    <button class="tab" data-view="list"><i class="ti ti-checkbox"></i> Tâches</button>
+    <button class="tab" data-view="more"><i class="ti ti-dots"></i> Plus</button>
+  </div>
+
+  <div class="view" id="view-more">
+    <p class="section-title">Plus</p>
+    <div class="more-menu" id="more-menu">
+      <button class="more-item" data-view="year"><i class="ti ti-calendar"></i><span>Année</span></button>
+      <button class="more-item" data-view="projects"><i class="ti ti-notebook"></i><span>Projets</span></button>
+      <button class="more-item" data-view="finance"><i class="ti ti-coin"></i><span>Finances</span></button>
+      <button class="more-item" data-view="foundations"><i class="ti ti-compass"></i><span>Fondations</span></button>
+      <button class="more-item" data-view="medical"><i class="ti ti-stethoscope"></i><span>Suivi santé & forme</span></button>
+      <button class="more-item" data-view="sleep-tracking"><i class="ti ti-moon"></i><span>Suivi sommeil</span></button>
+      <button class="more-item" data-view="help"><i class="ti ti-help"></i><span>Aide & contact</span></button>
+    </div>
+  </div>
+
+  <div class="view" id="view-now">
+
+    <div class="voice-assistant-card compact">
+      <div class="capture">
+        <input type="text" id="capture-input" placeholder="Dis ou écris ce que tu as à faire…" autocomplete="off">
+        <button class="iconbtn" id="mic-btn" aria-label="Dicter">
+          <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5a3 3 0 0 1 3 -3a3 3 0 0 1 3 3v5a3 3 0 0 1 -3 3a3 3 0 0 1 -3 -3l0 -5"/><path d="M5 10a7 7 0 0 0 14 0"/><path d="M8 21l8 0"/><path d="M12 17l0 4"/></svg>
+        </button>
+        <button class="iconbtn send" id="send-btn" aria-label="Ajouter">
+          <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5l0 14"/><path d="M5 12l14 0"/></svg>
+        </button>
+      </div>
+      <div class="mic-status" id="mic-status"></div>
+      <div class="capture-preview" id="capture-preview" style="display:none;"></div>
+    </div>
+
+    <div id="suggest-wrap" style="display:none;"></div>
+    <div id="agenda-gap-suggest-wrap" style="display:none;"></div>
+    <div id="export-reminder-wrap" style="display:none;"></div>
+    <div id="gap-objectives-wrap" style="display:none;"></div>
+
+    <div class="now-card" id="now-card"></div>
+    <div id="up-next-wrap"></div>
+
+    <div id="now-boussole-wrap" style="margin-top:20px;"></div>
+
+  </div>
+
+  <div class="block-modal-backdrop" id="goal-clarify-backdrop" style="display:none;">
+    <div class="block-modal">
+      <p class="section-title" style="margin-bottom:6px;">Ça ressemble à un objectif</p>
+      <p class="found-hint" style="margin-top:0;margin-bottom:14px;" id="goal-clarify-text-preview"></p>
+
+      <span class="found-label">Échéance</span>
+      <div class="horizon-tabs" id="goal-clarify-horizon-tabs" style="margin-bottom:14px;">
+        <div class="htab sel" data-h="court">Court terme</div>
+        <div class="htab" data-h="moyen">Moyen terme</div>
+        <div class="htab" data-h="long">Long terme</div>
+      </div>
+
+      <span class="found-label">Pilier</span>
+      <select class="found-input" id="goal-clarify-pillar-select" style="margin-bottom:16px;"></select>
+
+      <div class="goal-form-row">
+        <button class="btn primary" id="goal-clarify-save-btn" style="flex:1;justify-content:center;"><i class="ti ti-check"></i> Ajouter comme objectif</button>
+      </div>
+      <button class="btn ghost sm" id="goal-clarify-as-task-btn" style="margin-top:8px;width:100%;justify-content:center;">Plutôt une tâche simple</button>
+    </div>
+  </div>
+
+  <div class="block-modal-backdrop" id="day-clarify-backdrop" style="display:none;">
+    <div class="block-modal">
+      <p class="section-title" style="margin-bottom:6px;">À quelle heure ?</p>
+      <p class="found-hint" style="margin-top:0;margin-bottom:14px;" id="day-clarify-text-preview"></p>
+      <p class="found-hint" style="margin-top:-8px;margin-bottom:14px;" id="day-clarify-day-preview"></p>
+
+      <span class="found-label">Heure</span>
+      <input type="time" class="found-input" id="day-clarify-time-input" value="09:00" style="margin-bottom:16px;">
+
+      <div class="goal-form-row">
+        <button class="btn primary" id="day-clarify-save-btn" style="flex:1;justify-content:center;"><i class="ti ti-check"></i> Poser dans l'agenda</button>
+      </div>
+      <button class="btn ghost sm" id="day-clarify-as-task-btn" style="margin-top:8px;width:100%;justify-content:center;">Plutôt une tâche sans heure fixe</button>
+    </div>
+  </div>
+
+  <div class="fixed-modal-backdrop" id="personalize-backdrop" style="display:none;">
+    <div class="block-modal">
+      <p class="section-title" style="margin-bottom:6px;">Personnaliser</p>
+      <p class="found-hint" style="margin-top:0;margin-bottom:14px;">Une citation et une image qui te parlent, affichées discrètement en fond sur toute l'application.</p>
+
+      <span class="found-label">Citation</span>
+      <textarea id="personalize-quote-input" rows="2" placeholder="Ex : C'est en faisant des choses différentes qu'on obtient des choses différentes." style="margin-bottom:16px;"></textarea>
+
+      <span class="found-label">Image de fond</span>
+      <p class="found-hint" style="margin-top:0;">Compressée automatiquement pour ne pas alourdir ta sauvegarde.</p>
+      <input type="file" id="personalize-image-input" accept="image/*" style="margin-bottom:8px;">
+      <div id="personalize-image-preview-wrap" style="display:none;margin-bottom:12px;">
+        <img id="personalize-image-preview" style="width:100%;max-height:140px;object-fit:cover;border-radius:10px;">
+        <button class="btn ghost sm" id="personalize-image-remove-btn" style="margin-top:6px;">Retirer l'image</button>
+      </div>
+      <p class="found-hint" id="personalize-image-status" style="margin-top:0;"></p>
+
+      <div class="goal-form-row" style="margin-top:12px;">
+        <button class="btn primary" id="personalize-save-btn" style="flex:1;justify-content:center;"><i class="ti ti-check"></i> Enregistrer</button>
+        <button class="btn ghost sm" id="personalize-close-btn">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="view" id="view-today">
+    <p class="section-title">Ton agenda</p>
+    <div class="day-nav">
+      <button class="iconbtn sm" id="day-prev" aria-label="Jour précédent"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6l6 6"/></svg></button>
+      <div class="day-nav-label" id="day-nav-label"></div>
+      <button class="iconbtn sm" id="day-next" aria-label="Jour suivant"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6l-6 6"/></svg></button>
+      <button class="btn sm" id="day-today-btn" style="margin-left:auto;">Aujourd'hui</button>
+    </div>
+    <p class="found-hint" style="margin-top:8px;margin-bottom:14px;">Clique sur une plage horaire pour y poser un bloc. Pour un événement sur plusieurs jours, ajoute une date de fin.</p>
+
+    <div class="agenda" id="agenda-grid"></div>
+
+    <div class="block-modal-backdrop" id="block-modal-backdrop" style="display:none;">
+      <div class="block-modal">
+        <p class="section-title" id="block-modal-title" style="margin-bottom:14px;">Nouveau créneau</p>
+        <input type="text" class="found-input" id="block-title-input" placeholder="Titre (ex : musculation, trajet…)">
+        <div class="goal-form-row" style="margin-top:8px;">
+          <div style="flex:1;">
+            <label class="found-label" style="font-size:11px;margin-bottom:4px;">Heure de début</label>
+            <input type="time" class="found-input" id="block-start-time">
+          </div>
+          <div style="flex:1;">
+            <label class="found-label" style="font-size:11px;margin-bottom:4px;">Durée</label>
+            <div style="display:flex;gap:4px;">
+              <input type="number" class="found-input" id="block-duration-input" min="1" step="1" placeholder="30" style="flex:1;">
+              <select class="found-input" id="block-duration-unit" style="max-width:70px;">
+                <option value="min">min</option>
+                <option value="h">h</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="goal-form-row" style="margin-top:8px;">
+          <select class="found-input" id="block-pillar-select" style="flex:1;"></select>
+          <input type="date" class="found-input" id="block-end-date" style="flex:1;max-width:150px;" title="Jusqu'au (séjour multi-jours, optionnel)">
+        </div>
+        <button class="btn sm ghost" id="block-add-another-btn" style="display:none;margin-top:10px;width:100%;justify-content:center;"><i class="ti ti-plus"></i> Ajouter un autre créneau à la même heure</button>
+        <div class="goal-form-row" style="margin-top:14px;">
+          <button class="btn primary" id="block-save-btn" style="flex:1;justify-content:center;"><i class="ti ti-check"></i> Enregistrer</button>
+          <button class="btn" id="block-delete-btn" style="display:none;"><i class="ti ti-trash"></i></button>
+          <button class="btn ghost" id="block-cancel-btn">Annuler</button>
+        </div>
+      </div>
+    </div>
+
+    <details class="sleep-collapse" id="lunch-collapse">
+      <summary><i class="ti ti-toolbox" style="font-size:13px;"></i> Déjeuner de ce midi</summary>
+      <div>
+        <div class="goal-form-row">
+          <div style="flex:1;">
+            <label class="found-label">Début</label>
+            <input type="time" class="found-input" id="lunch-start-time" value="12:30">
+          </div>
+          <div style="flex:1;">
+            <label class="found-label">Fin</label>
+            <input type="time" class="found-input" id="lunch-end-time" value="13:30">
+          </div>
+        </div>
+        <button class="btn sm" id="lunch-add-to-agenda-btn" style="margin-top:10px;width:100%;">Poser dans l'agenda</button>
+      </div>
+    </details>
+
+    <details class="sleep-collapse" id="sleep-collapse">
+      <summary><i class="ti ti-moon" style="font-size:13px;"></i> Coucher de ce soir</summary>
+      <div>
+        <div class="sleep-mode-tabs" id="sleep-mode-tabs">
+          <div class="htab sel" data-mode="wake">Lever à...</div>
+          <div class="htab" data-mode="sleep">Je me couche</div>
+        </div>
+
+        <div style="margin-top:10px;">
+          <div id="sleep-wake-inputs">
+            <input type="time" class="found-input" id="sleep-wake-time" value="07:00">
+          </div>
+          <div id="sleep-now-inputs" style="display:none;">
+            <input type="time" class="found-input" id="sleep-now-time">
+          </div>
+          <div class="goal-form-row" style="margin-top:8px;">
+            <input type="number" class="found-input" id="sleep-cycles-input" min="1" max="8" value="5" title="Cycles par nuit" style="flex:1;">
+            <input type="number" class="found-input" id="sleep-cycle-len-input" min="60" max="120" value="90" title="Durée d'un cycle (min)" style="flex:1;">
+            <input type="number" class="found-input" id="sleep-fallasleep-input" min="0" max="60" value="30" title="Délai d'endormissement (min)" style="flex:1;">
+            <select class="found-input" id="sleep-activity-input" style="display:none;">
+              <option value="moderate" selected>Modéré</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="sleep-result-wrap" style="margin-top:10px;"></div>
+        <div id="sleep-cycle-detail-wrap"></div>
+      </div>
+    </details>
+
+    <details class="sleep-collapse" id="journal-collapse" style="margin-top:6px;">
+      <summary><i class="ti ti-notebook" style="font-size:13px;"></i> Résumé de la journée</summary>
+      <div>
+        <textarea id="journal-text" class="found-input" rows="4" placeholder="Comment s'est passée cette journée ? Faits marquants, ressentis, ce dont tu veux te souvenir…" style="resize:vertical;margin-bottom:10px;"></textarea>
+        <div id="journal-photo-wrap">
+          <div id="journal-photo-preview" style="display:none;margin-bottom:8px;"></div>
+          <label class="btn sm" style="cursor:pointer;width:100%;justify-content:center;display:flex;gap:6px;">
+            <i class="ti ti-camera"></i> Ajouter une photo
+            <input type="file" id="journal-photo-input" accept="image/*" style="display:none;">
+          </label>
+        </div>
+        <div class="goal-form-row" style="margin-top:10px;">
+          <button class="btn primary sm" id="journal-save-btn" style="flex:1;justify-content:center;"><i class="ti ti-check"></i> Sauvegarder</button>
+          <button class="btn ghost sm" id="journal-photo-remove" style="display:none;"><i class="ti ti-trash"></i></button>
+        </div>
+      </div>
+    </details>
+  </div>
+
+  <div class="view" id="view-week">
+    <div class="day-nav">
+      <button class="iconbtn sm" id="week-prev"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6l6 6"/></svg></button>
+      <div class="day-nav-label" id="week-nav-label"></div>
+      <button class="iconbtn sm" id="week-next"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6l-6 6"/></svg></button>
+      <button class="btn sm" id="week-today-btn" style="margin-left:auto;">Cette semaine</button>
+    </div>
+
+    <!-- Sélecteur de type de semaine -->
+    <div style="margin-top:12px;margin-bottom:8px;">
+      <p style="font-size:10.5px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:0.07em;margin:0 0 7px;">Type de semaine</p>
+      <div id="week-profile-selector" style="display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;"></div>
+    </div>
+
+    <p class="found-hint" style="margin-top:4px;">Touche une date pour l'agenda. Touche la ligne pour noter.</p>
+    <div class="week-grid" id="week-grid"></div>
+  </div>
+
+  <div class="view" id="view-year">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <p class="section-title" style="margin:0;">Planning annuel</p>
+      <button class="btn ghost sm" id="year-assign-toggle-btn"><i class="ti ti-paint"></i> Assigner</button>
+    </div>
+
+    <!-- Mode assignation : balayer pour colorier les semaines -->
+    <div id="year-assign-panel" style="display:none;background:var(--bg-raised);border:1px solid var(--card-border);border-radius:var(--radius);padding:12px;margin-bottom:12px;">
+      <p style="font-size:12px;color:var(--ink-dim);margin:0 0 10px;">Sélectionne un type puis balaye les semaines pour les assigner :</p>
+      <div id="year-profile-selector" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+      <p style="font-size:11px;color:var(--ink-faint);margin:10px 0 0;">Balaye les semaines sur le calendrier ci-dessous pour les assigner au type sélectionné.</p>
+    </div>
+
+    <div class="year-grid" id="year-grid"></div>
+    <p class="found-hint" style="margin-top:10px;text-align:center;">Chaque case = un jour. Coloré selon le pilier dominant ou le type de semaine assigné.</p>
+  </div>
+
+  <div class="view" id="view-goals">
+    <div class="view-back-row">
+      <button class="btn ghost sm" id="goals-back-btn"><i class="ti ti-arrow-left"></i> Retour</button>
+      <span class="section-title" style="margin:0;">Objectifs</span>
+    </div>
+    <div class="horizon-tabs" id="horizon-tabs">
+      <div class="htab sel" data-h="moyen">Moyen terme</div>
+      <div class="htab" data-h="long">Long terme</div>
+    </div>
+
+    <div class="goal-form">
+      <input type="text" class="found-input" id="goal-input" placeholder="Nouvel objectif…">
+      <div class="capture-preview" id="goal-capture-preview" style="display:none;"></div>
+      <div class="goal-form-row">
+        <select class="found-input" id="goal-pillar-select" style="flex:1;"></select>
+        <input type="date" class="found-input" id="goal-deadline-input" style="flex:1;max-width:150px;" title="Échéance estimée (optionnel)">
+        <button class="btn primary" id="goal-add-btn" style="flex-shrink:0;"><i class="ti ti-plus"></i> Ajouter</button>
+      </div>
+    </div>
+
+    <div id="goals-list"></div>
+  </div>
+
+  <div class="view" id="view-projects">
+    <div id="projects-list-wrap"></div>
+    <div id="project-detail-wrap" style="display:none;"></div>
+  </div>
+
+  <div class="view" id="view-finance">
+    <div class="finance-grid">
+      <div class="finance-card">
+        <div class="finance-card-label">Revenus mensuels</div>
+        <div class="finance-card-value" id="finance-income-display">0 €</div>
+      </div>
+      <div class="finance-card">
+        <div class="finance-card-label">Dépenses mensuelles</div>
+        <div class="finance-card-value" id="finance-expense-display">0 €</div>
+      </div>
+      <div class="finance-card" style="grid-column:1/-1;">
+        <div class="finance-card-label">Marge disponible / mois</div>
+        <div class="finance-card-value" id="finance-margin-display">0 €</div>
+      </div>
+    </div>
+
+    <p class="section-title">Revenus</p>
+    <div id="income-list"></div>
+    <button class="btn sm" id="add-income-btn" style="margin-bottom:22px;"><i class="ti ti-plus"></i> Ajouter un revenu</button>
+
+    <p class="section-title">Dépenses</p>
+    <div id="expense-list"></div>
+    <button class="btn sm" id="add-expense-btn" style="margin-bottom:18px;"><i class="ti ti-plus"></i> Ajouter une dépense</button>
+
+    <div id="expense-chart-wrap" style="margin-bottom:26px;"></div>
+
+    <p class="section-title">Objectifs d'acquisition</p>
+    <p class="found-hint" style="margin-top:-6px;">Ce que tu veux acquérir, et le temps qu'il te faudrait pour épargner assez avec ta marge actuelle.</p>
+    <div class="goal-form">
+      <input type="text" class="found-input" id="savings-name-input" placeholder="Ex : Van, moto, vélo de course…">
+      <div class="goal-form-row">
+        <input type="number" class="found-input" id="savings-cost-input" placeholder="Coût estimé (€)" style="flex:1;">
+        <button class="btn primary" id="savings-add-btn" style="flex-shrink:0;"><i class="ti ti-plus"></i> Ajouter</button>
+      </div>
+    </div>
+    <div id="savings-list"></div>
+  </div>
+
+  <!-- PAGE D'ENTRÉE : TÂCHES / OBJECTIFS -->
+  <div class="view" id="view-list">
+    <p class="section-title">Tâches & Objectifs</p>
+    <div class="hub-tiles">
+      <button class="hub-tile" data-view="tasks">
+        <i class="ti ti-checkbox" style="font-size:28px;"></i>
+        <span class="hub-tile-label">Tâches</span>
+        <span class="hub-tile-sub">Actions à accomplir, de l'heure au mois</span>
+        <span class="hub-tile-count" id="hub-tasks-count"></span>
+      </button>
+      <button class="hub-tile" data-view="goals">
+        <i class="ti ti-target-arrow" style="font-size:28px;"></i>
+        <span class="hub-tile-label">Objectifs</span>
+        <span class="hub-tile-sub">Moyen terme (6 mois–1 an) & long terme</span>
+        <span class="hub-tile-count" id="hub-goals-count"></span>
+      </button>
+    </div>
+  </div>
+
+  <!-- VUE TÂCHES -->
+  <div class="view" id="view-tasks">
+    <div class="view-back-row">
+      <button class="btn ghost sm" id="tasks-back-btn"><i class="ti ti-arrow-left"></i> Retour</button>
+      <span class="section-title" style="margin:0;">Tâches</span>
+    </div>
+    <div id="task-capture-wrap" style="margin-bottom:16px;">
+      <input type="text" class="found-input" id="task-input" placeholder="Nouvelle tâche…" style="margin-bottom:8px;">
+      <div class="goal-form-row">
+        <select class="found-input" id="task-urgency" style="flex:2;">
+          <option value="hour">Dans l'heure</option>
+          <option value="day">Dans la journée</option>
+          <option value="2days">Dans 2 jours</option>
+          <option value="week" selected>Dans la semaine</option>
+          <option value="month">Dans le mois</option>
+        </select>
+        <input type="number" class="found-input" id="task-duration" placeholder="min" min="5" step="5" style="flex:1;" title="Durée estimée en minutes">
+        <button class="btn primary sm" id="task-add-btn"><i class="ti ti-plus"></i></button>
+      </div>
+    </div>
+    <div id="tasks-list"></div>
+  </div>
+
+  <!-- ONBOARDING MODAL -->
+  <div id="onboarding-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:999;align-items:center;justify-content:center;padding:20px;">
+    <div style="background:var(--bg-raised);border:1px solid var(--card-border);border-radius:20px;padding:28px 22px;max-width:380px;width:100%;">
+      <div style="text-align:center;margin-bottom:20px;">
+        <div style="font-size:28px;margin-bottom:8px;">🧭</div>
+        <p style="font-family:'Fraunces',serif;font-size:20px;color:var(--ink);margin:0 0 6px;">Ta vie idéale</p>
+        <p style="font-size:12.5px;color:var(--ink-faint);margin:0;line-height:1.5;">Si tu pouvais construire ton année parfaite, comment répartirais-tu ton temps entre ces 4 domaines ?</p>
+      </div>
+      <div id="onboarding-sliders"></div>
+      <div style="text-align:center;margin-top:6px;">
+        <span id="onboarding-total-label" style="font-size:12px;color:var(--ink-faint);">Total : 100%</span>
+      </div>
+      <button class="btn primary full" id="onboarding-save-btn" style="margin-top:16px;"><i class="ti ti-check"></i> Valider ma répartition</button>
+    </div>
+  </div>
+
+  <!-- VUE BALANCE / BOUSSOLE -->
+  <div class="view" id="view-balance">
+
+    <!-- VUE PRINCIPALE : score + camemberts + profils -->
+    <div id="balance-main">
+
+      <!-- Score global -->
+      <div style="background:var(--bg-raised);border:1px solid var(--card-border);border-radius:var(--radius-lg);padding:18px;text-align:center;margin-bottom:16px;">
+        <div id="boussole-score-number" style="font-family:'Fraunces',serif;font-size:52px;line-height:1;color:var(--accent);">—</div>
+        <div style="font-size:10px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:0.07em;margin-top:2px;">Score Boussole · semaine en cours</div>
+        <div id="boussole-score-detail" style="font-size:12px;color:var(--ink-dim);margin-top:8px;line-height:1.5;"></div>
+      </div>
+
+      <!-- Profils de semaine -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <p class="section-title" style="margin:0;">Mon profil actif</p>
+        <button class="btn ghost sm" id="add-profile-btn"><i class="ti ti-plus"></i> Ajouter</button>
+      </div>
+      <div id="profile-tabs" style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;scrollbar-width:none;"></div>
+
+      <!-- Deux camemberts -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+        <div style="background:var(--bg-raised);border:1px solid var(--card-border);border-radius:var(--radius);padding:12px;">
+          <p style="font-size:10px;color:var(--ink-faint);text-align:center;margin:0 0 8px;text-transform:uppercase;letter-spacing:0.06em;">Ma semaine idéale</p>
+          <svg id="pie-ideal" width="110" height="110" viewBox="0 0 120 120" style="display:block;margin:0 auto;"></svg>
+          <div id="pie-ideal-legend" style="margin-top:8px;display:flex;flex-direction:column;gap:3px;"></div>
+        </div>
+        <div style="background:var(--bg-raised);border:1px solid var(--card-border);border-radius:var(--radius);padding:12px;">
+          <p style="font-size:10px;color:var(--ink-faint);text-align:center;margin:0 0 8px;text-transform:uppercase;letter-spacing:0.06em;">Cette semaine</p>
+          <svg id="pie-real" width="110" height="110" viewBox="0 0 120 120" style="display:block;margin:0 auto;"></svg>
+          <div id="pie-real-legend" style="margin-top:8px;display:flex;flex-direction:column;gap:3px;"></div>
+        </div>
+      </div>
+
+      <!-- Bouton configurer -->
+      <button class="btn sm" id="configure-profile-btn" style="width:100%;justify-content:center;margin-bottom:12px;"><i class="ti ti-settings"></i> Configurer ce profil</button>
+
+      <!-- Écarts -->
+      <div id="balance-gaps" style="background:var(--bg-raised);border:1px solid var(--card-border);border-radius:var(--radius);padding:14px;margin-bottom:12px;"></div>
+
+      <!-- Conseil -->
+      <div id="balance-advice" style="background:var(--accent-dim);border:1px solid var(--accent);border-radius:var(--radius);padding:14px;font-size:13px;line-height:1.5;color:var(--ink);display:none;margin-bottom:12px;"></div>
+
+      <!-- Santé -->
+      <p class="section-title" style="margin-top:22px;">Santé</p>
+      <div style="background:var(--bg-raised);border:1px solid var(--card-border);border-radius:var(--radius);padding:14px;margin-bottom:12px;">
+        <p style="font-size:11.5px;color:var(--ink-faint);margin:0 0 14px;line-height:1.5;">Note chaque dimension sur 100.</p>
+        <div id="health-sliders"></div>
+        <button class="btn primary sm" id="health-save-btn" style="width:100%;justify-content:center;margin-top:12px;"><i class="ti ti-check"></i> Enregistrer</button>
+      </div>
+      <div style="background:var(--bg-raised);border:1px solid var(--card-border);border-radius:var(--radius);padding:14px;margin-bottom:12px;">
+        <p style="font-size:10px;color:var(--ink-faint);text-align:center;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.06em;">Santé globale</p>
+        <svg id="pie-health" width="120" height="120" viewBox="0 0 120 120" style="display:block;margin:0 auto;"></svg>
+        <div id="pie-health-legend" style="margin-top:10px;display:flex;flex-direction:column;gap:4px;"></div>
+      </div>
+
+      <p style="font-size:11px;color:var(--ink-faint);text-align:center;margin-top:12px;line-height:1.5;">Temps éveillé uniquement · hors sommeil et repas.</p>
+    </div>
+
+    <!-- VUE WIZARD : configuration guidée d'un profil -->
+    <div id="balance-wizard" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:100;overflow-y:auto;padding:20px 16px 40px;"></div>
+
+  </div>
+
+  <div class="view" id="view-foundations">
+    <div class="found-section">
+      <span class="found-label">Ta vision — qui veux-tu devenir ?</span>
+      <p class="found-hint">Une à trois phrases. Pas besoin que ce soit parfait, juste vrai pour toi aujourd'hui.</p>
+      <textarea id="vision-text" rows="3" placeholder="Ex : Je veux transmettre par l'enseignement et construire des projets qui me rendent fier, sans sacrifier ma santé ni mes proches."></textarea>
+    </div>
+
+    <div class="found-section">
+      <span class="found-label">Par quoi passe ton épanouissement ?</span>
+      <p class="found-hint">Choisis les piliers de vie que tu veux suivre maintenant. C'est la base de tout le reste — répartition annuelle, agenda, équilibre.</p>
+      <div class="pillar-grid" id="pillar-grid"></div>
+    </div>
+
+    <div class="save-bar">
+      <button class="btn primary full" id="save-foundations"><i class="ti ti-check"></i> Enregistrer mes fondations</button>
+    </div>
+  </div>
+
+  <div class="view" id="view-medical">
+    <p class="section-title">Suivi santé & forme</p>
+    <div class="sub-tabs" id="health-sub-tabs">
+      <button class="sub-tab active" data-subview="med">Médical</button>
+      <button class="sub-tab" data-subview="food">Alimentation</button>
+      <button class="sub-tab" data-subview="activity">Activité physique</button>
+    </div>
+
+    <div class="health-subview active" id="health-sub-med">
+    <p class="found-hint" style="margin-top:0;">Ces informations restent purement informatives — elles ne déclenchent aucun calcul ni recommandation automatique personnalisée. C'est ta mémoire, pas un diagnostic.</p>
+    <div class="found-section">
+      <div class="goal-form-row">
+        <div style="flex:1;">
+          <span class="found-label">Sexe</span>
+          <select class="found-input" id="medical-sex-input">
+            <option value="">—</option>
+            <option value="homme">Homme</option>
+            <option value="femme">Femme</option>
+            <option value="autre">Autre</option>
+          </select>
+        </div>
+        <div style="flex:1;">
+          <span class="found-label">Âge</span>
+          <input type="number" class="found-input" id="medical-age-input" min="0" max="120">
+        </div>
+      </div>
+      <div style="margin-top:10px;">
+        <span class="found-label">Niveau d'activité physique habituel</span>
+        <select class="found-input" id="medical-activity-input">
+          <option value="">—</option>
+          <option value="sedentary">Sédentaire</option>
+          <option value="moderate">Modéré (1-2 séances/semaine)</option>
+          <option value="active">Actif (3+ séances/semaine)</option>
+          <option value="athlete">Sportif assidu / compétition</option>
+        </select>
+      </div>
+      <div style="margin-top:10px;">
+        <span class="found-label">Antécédents sportifs ou médicaux notables</span>
+        <textarea id="medical-history-input" rows="3" placeholder="Ex : entorse de la cheville droite en 2023, périostite tibiale récurrente côté gauche…"></textarea>
+      </div>
+    </div>
+
+    <p class="section-title" style="margin-top:26px;">Carnet de suivi</p>
+    <p class="found-hint" style="margin-top:-6px;">Tes rendez-vous passés et à venir, par spécialité, avec un rappel que tu règles toi-même.</p>
+
+    <div class="goal-form" style="margin-bottom:16px;">
+      <select class="found-input" id="medical-appt-specialty" style="margin-bottom:8px;">
+        <option value="dentiste">Dentiste</option>
+        <option value="osteopathe">Ostéopathe</option>
+        <option value="kine">Kinésithérapeute</option>
+        <option value="generaliste">Médecin généraliste</option>
+        <option value="prise_de_sang">Prise de sang / bilan</option>
+        <option value="autre">Autre</option>
+      </select>
+      <div class="goal-form-row">
+        <input type="date" class="found-input" id="medical-appt-date" style="flex:1;">
+        <input type="number" class="found-input" id="medical-appt-reminder" placeholder="Rappel après (mois)" style="flex:1;max-width:160px;">
+      </div>
+      <input type="text" class="found-input" id="medical-appt-notes" placeholder="Note (optionnel)" style="margin-top:8px;">
+      <button class="btn primary" id="medical-appt-add-btn" style="margin-top:8px;"><i class="ti ti-plus"></i> Ajouter au carnet</button>
+    </div>
+
+    <div id="medical-appt-list"></div>
+
+    <p class="section-title" style="margin-top:26px;">Repères généraux (non personnalisés)</p>
+    <div id="medical-general-info"></div>
+    </div>
+
+    <div class="health-subview" id="health-sub-food">
+      <p class="found-hint" style="margin-top:0;">Note ce que tu manges, les totaux se calculent automatiquement à partir de tables nutritionnelles publiques. Aucune suggestion ni recommandation personnalisée — c'est un journal, pas un coach.</p>
+
+      <div class="goal-form" style="margin-bottom:16px;">
+        <input type="text" class="found-input" id="food-name-input" placeholder="Aliment (ex : riz blanc cuit, poulet, banane…)">
+        <div class="goal-form-row">
+          <input type="number" class="found-input" id="food-qty-input" placeholder="Quantité (g)" style="flex:1;">
+          <select class="found-input" id="food-meal-input" style="flex:1;">
+            <option value="matin">Matin</option>
+            <option value="midi">Midi</option>
+            <option value="gouter">Goûter</option>
+            <option value="soir">Soir</option>
+          </select>
+        </div>
+        <button class="btn primary" id="food-add-btn"><i class="ti ti-plus"></i> Ajouter à aujourd'hui</button>
+      </div>
+
+      <div id="food-totals-wrap"></div>
+      <p class="section-title" style="margin-top:22px;">Aujourd'hui</p>
+      <div id="food-log-list"></div>
+    </div>
+
+    <div class="health-subview" id="health-sub-activity">
+      <p class="found-hint" style="margin-top:0;">Note tes séances réelles (musculation, foot, course…). C'est un historique de ce que tu as fait, pas un programme suggéré — le contenu de tes séances reste entièrement ton choix.</p>
+
+      <div class="goal-form" style="margin-bottom:16px;">
+        <input type="text" class="found-input" id="activity-name-input" placeholder="Séance (ex : musculation haut du corps, match de foot…)">
+        <div class="goal-form-row">
+          <input type="date" class="found-input" id="activity-date-input" style="flex:1;">
+          <input type="number" class="found-input" id="activity-duration-input" placeholder="Durée (min)" style="flex:1;">
+        </div>
+        <textarea id="activity-notes-input" rows="2" placeholder="Détail (exercices, séries, charges…) — optionnel"></textarea>
+        <button class="btn primary" id="activity-add-btn"><i class="ti ti-plus"></i> Ajouter au journal</button>
+      </div>
+
+      <div id="activity-log-list"></div>
+    </div>
+  </div>
+
+  <div class="view" id="view-sleep-tracking">
+    <p class="section-title">Suivi sommeil</p>
+    <p class="found-hint" style="margin-top:0;">Les durées viennent automatiquement des nuits posées via le calculateur. La qualité ressentie est facultative, à toi de la noter si tu veux.</p>
+
+    <div class="found-section" style="margin-bottom:18px;">
+      <span class="found-label">Durée cible par nuit</span>
+      <div class="goal-form-row">
+        <input type="number" class="found-input" id="sleep-target-hours-input" min="4" max="12" step="0.5" style="flex:1;">
+        <span style="align-self:center;color:var(--ink-faint);font-size:13px;">heures</span>
+      </div>
+    </div>
+
+    <div class="found-section" style="margin-bottom:18px;">
+      <span class="found-label">Qualité ressentie cette nuit (la plus récente)</span>
+      <div class="quality-rating-row" id="quality-rating-row"></div>
+    </div>
+
+    <div class="sub-tabs" id="sleep-period-tabs">
+      <button class="sub-tab active" data-period="week">Semaine</button>
+      <button class="sub-tab" data-period="month">Mois</button>
+      <button class="sub-tab" data-period="year">Année</button>
+    </div>
+
+    <div id="sleep-tracking-summary"></div>
+    <div id="sleep-tracking-chart"></div>
+  </div>
+
+  <div class="view" id="view-help">
+    <p class="section-title">Aide & contact</p>
+    <div class="sub-tabs" id="help-sub-tabs">
+      <button class="sub-tab active" data-helpsubview="faq">FAQ</button>
+      <button class="sub-tab" data-helpsubview="contact">Nous contacter</button>
+      <button class="sub-tab" data-helpsubview="about">Qui sommes-nous</button>
+    </div>
+
+    <div class="subview active" id="help-sub-faq">
+      <div class="faq-item">
+        <div class="faq-q">Mes données sont-elles envoyées sur internet ?</div>
+        <div class="faq-a">Non. Boussole est un fichier que tu gardes sur ton appareil ; tout ce que tu notes reste dans ton navigateur, rien n'est transmis à un serveur.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">Comment je sauvegarde mes données si je change de téléphone ou de navigateur ?</div>
+        <div class="faq-a">En bas de la page Maintenant, le bouton « Télécharger une sauvegarde » crée un fichier que tu peux ensuite restaurer avec « Restaurer depuis un fichier », sur n'importe quel appareil.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">J'ai supprimé quelque chose par erreur, comment je le récupère ?</div>
+        <div class="faq-a">Un bandeau « Annuler » apparaît en bas de l'écran juste après chaque suppression. Il reste affiché jusqu'à ce que tu cliques sur Annuler ou ailleurs sur la page — passé ce moment, la suppression devient définitive.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">Pourquoi l'app ne me donne jamais de conseils nutritionnels ou sportifs personnalisés ?</div>
+        <div class="faq-a">C'est un choix volontaire : ce n'est pas le rôle de cette application de remplacer un professionnel de santé. Les journaux alimentation et activité physique sont des carnets que tu remplis toi-même, avec des calculs automatiques sur des données publiques, jamais des recommandations.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">Comment je retrouve rapidement une tâche ou un objectif précis ?</div>
+        <div class="faq-a">La petite loupe en haut de l'écran t'amène directement sur l'onglet « Tout » avec le champ de recherche déjà prêt à utiliser.</div>
+      </div>
+    </div>
+
+    <div class="subview" id="help-sub-contact">
+      <p class="found-hint" style="margin-top:0;">Une question, un bug à signaler, une idée d'amélioration ? Écris-moi directement.</p>
+      <div class="contact-card">
+        <div class="contact-row"><span class="contact-icon" id="contact-mail-icon"></span><a href="mailto:contact@boussole-app.fr" id="contact-mail-link">contact@boussole-app.fr</a></div>
+        <p class="found-hint" style="margin-top:10px;margin-bottom:0;">Adresse provisoire — à remplacer par ta vraie adresse de contact.</p>
+      </div>
+    </div>
+
+    <div class="subview" id="help-sub-about">
+      <p class="about-text">J'ai 21 ans et je suis étudiant-entrepreneur. J'ai créé Boussole pour répondre à un besoin très concret : j'ai plusieurs vies en parallèle — le sport à haut niveau, les études pour devenir professeur d'EPS, des projets entrepreneuriaux que je mène en même temps — et aucun outil existant ne me permettait de les voir ensemble sans en sacrifier une pour les autres.</p>
+      <p class="about-text">Je prépare une licence entraînement sportif pour devenir préparateur physique, en parallèle du CAPEPS pour enseigner l'EPS. À côté, je fais avancer plusieurs projets personnels : une marque de boisson, de la musique en tant que DJ indépendant, et l'écriture d'un livre. Boussole est né de la difficulté à tout faire avancer de front sans rien laisser filer.</p>
+      <p class="about-text">La philosophie derrière l'app est simple : elle n'est pas censée penser à ma place. Elle classe ce que je lui donne, elle me rappelle ce que j'ai mis de côté, elle calcule ce qui peut se calculer honnêtement — mais elle ne me dit jamais quoi manger, comment m'entraîner, ou ce que je devrais ressentir. Ces décisions-là m'appartiennent, ou appartiennent aux professionnels qualifiés pour m'accompagner sur ces sujets.</p>
+      <p class="about-text">Boussole reste un prototype de travail, construit et affiné progressivement à partir de mon usage réel au quotidien.</p>
+    </div>
+  </div>
+
+  <p class="footer-note">
+    Boussole v2 — prototype de travail. Tes données restent dans ce fichier, sur cet appareil.
+  </p>
+  <div class="backup-actions">
+    <button class="btn sm" id="export-data-btn"><i class="ti ti-download"></i> Télécharger une sauvegarde</button>
+    <button class="btn sm" id="import-data-btn"><i class="ti ti-upload"></i> Restaurer depuis un fichier</button>
+    <input type="file" id="import-file-input" accept="application/json" style="display:none;">
+  </div>
+  <p class="footer-note" style="margin-top:14px;">
+    <button class="btn ghost sm" id="reset-data-btn"><i class="ti ti-refresh"></i> Tout réinitialiser (efface tes données de cet appareil)</button>
+  </p>
+</div>
+
+<div id="undo-toast" class="undo-toast" style="display:none;">
+  <span id="undo-toast-text"></span>
+  <button class="btn primary sm" id="undo-toast-btn">Annuler</button>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
