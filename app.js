@@ -311,6 +311,9 @@
     if(!result.finance.incomes) result.finance.incomes = [];
     if(!result.finance.expenses) result.finance.expenses = [];
     if(!result.finance.savingsGoals) result.finance.savingsGoals = [];
+    if(!result.finance.accounts) result.finance.accounts = [];
+    if(!result.finance.transactions) result.finance.transactions = [];
+    if(!result.finance.customRules) result.finance.customRules = [];
     if(result.goals) result.goals.forEach(function(g){
       if(typeof g.notes !== 'string') g.notes='';
       if(typeof g.links !== 'string') g.links='';
@@ -3785,6 +3788,28 @@
   ];
   function expenseCategoryDef(id){ return findItem(EXPENSE_CATEGORIES, {id:id}) || EXPENSE_CATEGORIES[EXPENSE_CATEGORIES.length-1]; }
 
+  var TRANSACTION_CATEGORIES = [
+    {id:'logement',    label:'Logement',          color:'#7F77DD', emoji:'🏠', kw:['loyer','charges','copropriete','syndic','agence','fonciere','hypotheque','bail']},
+    {id:'alimentation',label:'Alimentation',       color:'#E8895A', emoji:'🛒', kw:['lidl','aldi','carrefour','leclerc','super u','intermarche','spar','casino','monoprix','franprix','netto','auchan','biocoop','grand frais','picard','supermarche','epicerie','courses','comtesse du barry']},
+    {id:'restaurants', label:'Restaurants / Café', color:'#F59E0B', emoji:'🍕', kw:['mcdonald','mcdo','burger king','kfc','subway','quick','domino','starbucks','brasserie','pizzeria','kebab','sushi','ramen','uber eats','deliveroo','just eat','paul ','brioche doree']},
+    {id:'transport',   label:'Transport / Essence',color:'#BA7517', emoji:'🚗', kw:['totalenergies','total ','bp ','shell','esso','sncf','ouisncf','uber','blablacar','ratp','tcl','parking','autoroute','peage','vinci','flixbus','navigo','taxi ']},
+    {id:'abonnements', label:'Abonnements / Télécom',color:'#378ADD',emoji:'📱', kw:['sfr ','orange','bouygues','free mobile','sosh','prixtel','red by sfr','numericable','bbox','netflix','spotify','disney','canal+','amazon prime','deezer','twitch','apple ']},
+    {id:'loisirs',     label:'Loisirs / Sorties',  color:'#7A9B76', emoji:'🎭', kw:['cinema','ugc','pathe','steam','fnac','cultura','decathlon','basic fit','neoness','salle de sport','concert','festival','theatre','musee','bowling','karting','escape']},
+    {id:'vetements',   label:'Vêtements / Mode',   color:'#EC4899', emoji:'👕', kw:['zara','h&m','kiabi','primark','zalando','asos','uniqlo','bershka','shein','celio','jules ','la redoute','camaieu','jennyfer','sandro','maje']},
+    {id:'sante',       label:'Santé',              color:'#D4537E', emoji:'💊', kw:['pharmacie','docteur','hopital','clinique','mutuelle','cpam','ameli','dentiste','opticien','kine','osteo','medecin','laboratoire']},
+    {id:'autre',       label:'Autre',              color:'#6B6962', emoji:'💳', kw:[]}
+  ];
+  function txCategoryDef(id){
+    for(var i=0;i<TRANSACTION_CATEGORIES.length;i++) if(TRANSACTION_CATEGORIES[i].id===id) return TRANSACTION_CATEGORIES[i];
+    return TRANSACTION_CATEGORIES[TRANSACTION_CATEGORIES.length-1];
+  }
+
+  var ACCOUNT_COLORS = ['#7B77D4','#6EBF8B','#F59E0B','#EC4899','#06B6D4','#F97316'];
+  var _activeFinanceTab = 'budget';
+  var _analyticsPeriod = {year: new Date().getFullYear(), month: new Date().getMonth()};
+  var _analyticsMode = 'month';
+  var _csvParsed = null;
+
   function renderFinanceList(listId, items, kind){
     var wrap = document.getElementById(listId);
     if(!items.length){
@@ -3906,6 +3931,8 @@
   }
 
   function renderFinance(){
+    if(_activeFinanceTab === 'comptes'){ renderFinanceComptes(); return; }
+    if(_activeFinanceTab === 'analyses'){ renderAnalytics(); return; }
     renderFinanceSummary();
     renderFinanceList('income-list', state.finance.incomes, 'income');
     renderFinanceList('expense-list', state.finance.expenses, 'expense');
@@ -3930,6 +3957,479 @@
     state.finance.savingsGoals.push({id:'sg'+Date.now(), name:name, cost:cost, createdAt:Date.now()});
     saveData(); nameInput.value=''; costInput.value=''; renderSavingsGoals();
   });
+
+  // ============ FINANCE: IMPORT CSV + COMPTES + ANALYSES ============
+
+  function switchFinanceTab(tab){
+    _activeFinanceTab = tab;
+    ['budget','comptes','analyses'].forEach(function(t){
+      var el = document.getElementById('ftab-'+t);
+      if(el) el.style.display = (t===tab) ? '' : 'none';
+    });
+    document.querySelectorAll('.finance-tab').forEach(function(btn){
+      btn.classList.toggle('active', btn.dataset.ftab === tab);
+    });
+    if(tab === 'comptes') renderFinanceComptes();
+    if(tab === 'analyses') renderAnalytics();
+  }
+
+  function renderFinanceComptes(){
+    renderAccountsWrap();
+    renderTxList();
+  }
+
+  function renderAccountsWrap(){
+    var wrap = document.getElementById('accounts-wrap');
+    if(!wrap) return;
+    var accounts = state.finance.accounts || [];
+    if(!accounts.length){
+      wrap.innerHTML = '<p class="found-hint" style="margin:0 0 8px;">Aucun compte. Ajoutez un compte pour importer vos relevés bancaires.</p>';
+    } else {
+      wrap.innerHTML = accounts.map(function(acc, i){
+        var color = acc.color || ACCOUNT_COLORS[i % ACCOUNT_COLORS.length];
+        var txCount = (state.finance.transactions||[]).filter(function(t){ return t.accountId===acc.id; }).length;
+        return '<div class="acc-card" style="border-left:3px solid '+color+';">'+
+          '<div class="acc-card-top">'+
+            '<div style="font-weight:500;font-size:14px;">'+escapeHtml(acc.name)+'</div>'+
+            '<div style="display:flex;gap:8px;align-items:center;">'+
+              '<button class="btn sm" data-acc-import="'+acc.id+'" style="font-size:12px;padding:5px 10px;">📂 Importer CSV</button>'+
+              '<div class="item-del" data-acc-del="'+acc.id+'" style="display:flex;align-items:center;cursor:pointer;">'+svgIcon('trash',14)+'</div>'+
+            '</div>'+
+          '</div>'+
+          '<div style="font-size:12px;color:var(--ink-faint);">'+txCount+' transaction'+(txCount>1?'s':'')+'</div>'+
+        '</div>';
+      }).join('');
+      wrap.querySelectorAll('[data-acc-import]').forEach(function(btn){
+        btn.addEventListener('click', function(){ openCSVImport(btn.dataset.accImport); });
+      });
+      wrap.querySelectorAll('[data-acc-del]').forEach(function(el){
+        el.addEventListener('click', function(){
+          var acc = findItem(state.finance.accounts,{id:el.dataset.accDel});
+          deleteWithUndo(function(){ return state.finance.accounts; }, el.dataset.accDel, acc?acc.name:'compte', [renderFinanceComptes]);
+        });
+      });
+    }
+    var sel = document.getElementById('tx-account-filter');
+    if(sel){
+      var curVal = sel.value;
+      sel.innerHTML = '<option value="">Tous les comptes</option>' +
+        accounts.map(function(a){ return '<option value="'+a.id+'">'+escapeHtml(a.name)+'</option>'; }).join('');
+      if(accounts.some(function(a){ return a.id===curVal; })) sel.value = curVal;
+    }
+  }
+
+  function renderTxList(){
+    var wrap = document.getElementById('tx-list');
+    if(!wrap) return;
+    var txs = (state.finance.transactions||[]).slice();
+    var accFilter = (document.getElementById('tx-account-filter')||{}).value || '';
+    var catFilter = (document.getElementById('tx-cat-filter')||{}).value || '';
+    if(accFilter) txs = txs.filter(function(t){ return t.accountId===accFilter; });
+    if(catFilter) txs = txs.filter(function(t){ return t.category===catFilter; });
+    txs.sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+    if(!txs.length){
+      wrap.innerHTML = '<p class="found-hint" style="margin:0;">'+(
+        (state.finance.transactions||[]).length===0
+          ? 'Importez votre premier relevé bancaire pour voir vos transactions.'
+          : 'Aucune transaction pour ces filtres.'
+      )+'</p>';
+      return;
+    }
+    var shown = txs.slice(0,150);
+    var accounts = state.finance.accounts || [];
+    wrap.innerHTML = '<div style="font-size:12px;color:var(--ink-faint);margin-bottom:8px;">'+
+      shown.length+' transaction'+(shown.length>1?'s':'')+(txs.length>150?' (sur '+txs.length+')':'')+
+    '</div>'+
+    shown.map(function(tx){
+      var catDef = txCategoryDef(tx.category);
+      var isDebit = tx.amount < 0;
+      var acc = findItem(accounts,{id:tx.accountId});
+      var amtStr = (isDebit?'':'+')+tx.amount.toFixed(2)+' €';
+      return '<div class="tx-row">'+
+        '<div class="tx-dot" style="background:'+catDef.color+'"></div>'+
+        '<div class="tx-main">'+
+          '<div class="tx-label">'+escapeHtml(tx.label||'')+'</div>'+
+          '<div class="tx-meta">'+tx.date+(acc?' · '+escapeHtml(acc.name):'')+'</div>'+
+        '</div>'+
+        '<div class="tx-right">'+
+          '<div class="tx-amount '+(isDebit?'neg':'pos')+'">'+amtStr+'</div>'+
+          '<select class="tx-cat-sel" data-txid="'+tx.id+'">'+
+            TRANSACTION_CATEGORIES.map(function(c){ return '<option value="'+c.id+'"'+(tx.category===c.id?' selected':'')+'>'+c.emoji+' '+c.label+'</option>'; }).join('')+
+          '</select>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+    wrap.querySelectorAll('.tx-cat-sel').forEach(function(sel){
+      sel.addEventListener('change', function(){
+        var tx = findItem(state.finance.transactions,{id:sel.dataset.txid});
+        if(!tx) return;
+        var norm = (tx.rawLabel||tx.label||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' ').trim();
+        if(norm.length > 3){
+          var rules = state.finance.customRules||[];
+          var existing = null;
+          for(var i=0;i<rules.length;i++) if(rules[i].pattern===norm.slice(0,25)) existing=rules[i];
+          if(existing){ existing.category=sel.value; } else { rules.push({pattern:norm.slice(0,25),category:sel.value}); }
+          state.finance.customRules = rules;
+        }
+        tx.category = sel.value;
+        saveData();
+      });
+    });
+  }
+
+  function renderAnalytics(){
+    var wrap = document.getElementById('analytics-wrap');
+    if(!wrap) return;
+    var modeEl = document.getElementById('analytics-mode');
+    if(modeEl) _analyticsMode = modeEl.value;
+    var MONTH_NAMES_FR = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+    var lbl = document.getElementById('analytics-period-label');
+    if(lbl) lbl.textContent = _analyticsMode==='month' ? MONTH_NAMES_FR[_analyticsPeriod.month]+' '+_analyticsPeriod.year : 'Année '+_analyticsPeriod.year;
+    if(_analyticsMode==='month') renderMonthlyAnalytics(wrap);
+    else renderAnnualAnalytics(wrap);
+  }
+
+  function renderMonthlyAnalytics(wrap){
+    var yr=_analyticsPeriod.year, mo=_analyticsPeriod.month;
+    var txs=(state.finance.transactions||[]).filter(function(t){
+      if(!t.date) return false;
+      var d=new Date(t.date);
+      return d.getFullYear()===yr && d.getMonth()===mo && t.amount<0;
+    });
+    if(!txs.length){ wrap.innerHTML='<p class="found-hint" style="margin:16px 0;">Aucune dépense importée pour cette période.</p>'; return; }
+    var total=txs.reduce(function(s,t){ return s+Math.abs(t.amount); },0);
+    var byCat={};
+    txs.forEach(function(t){ var c=t.category||'autre'; byCat[c]=(byCat[c]||0)+Math.abs(t.amount); });
+    var entries=Object.keys(byCat).map(function(id){ return {id:id,amount:byCat[id]}; });
+    entries.sort(function(a,b){ return b.amount-a.amount; });
+    var html='<div style="margin-bottom:12px;font-size:13px;color:var(--ink-faint);">'+txs.length+' transactions · <span style="font-family:Fraunces,serif;font-size:20px;color:var(--ink);">'+Math.round(total)+'€</span> dépensés</div>';
+    html+=entries.map(function(e){
+      var def=txCategoryDef(e.id), pct=Math.round((e.amount/total)*100);
+      return '<div class="analytics-bar-row">'+
+        '<div class="analytics-bar-label">'+def.emoji+' <span>'+def.label+'</span></div>'+
+        '<div class="analytics-bar-track"><div class="analytics-bar-fill" style="width:'+pct+'%;background:'+def.color+';"></div></div>'+
+        '<div class="analytics-bar-val">'+Math.round(e.amount)+'€ <span style="color:var(--ink-faint);">('+pct+'%)</span></div>'+
+      '</div>';
+    }).join('');
+    wrap.innerHTML=html;
+  }
+
+  function renderAnnualAnalytics(wrap){
+    var yr=_analyticsPeriod.year;
+    var MONTH_S=['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+    var txs=(state.finance.transactions||[]).filter(function(t){
+      return t.date && new Date(t.date).getFullYear()===yr && t.amount<0;
+    });
+    if(!txs.length){ wrap.innerHTML='<p class="found-hint" style="margin:16px 0;">Aucune dépense importée pour '+yr+'.</p>'; return; }
+    var totalYear=txs.reduce(function(s,t){ return s+Math.abs(t.amount); },0);
+    var monthly=[];
+    for(var m=0;m<12;m++){
+      var mt=txs.filter(function(t){ return new Date(t.date).getMonth()===m; });
+      monthly.push({m:m,total:mt.reduce(function(s,t){ return s+Math.abs(t.amount); },0)});
+    }
+    var maxMo=Math.max.apply(null,monthly.map(function(m){ return m.total; }))||1;
+    var html='<div style="margin-bottom:12px;font-size:13px;color:var(--ink-faint);">Moy. <span style="font-family:Fraunces,serif;font-size:18px;color:var(--ink);">'+Math.round(totalYear/12)+'€</span>/mois · total '+Math.round(totalYear)+'€</div>';
+    html+='<div class="annual-bars-wrap">';
+    html+=monthly.map(function(mo){
+      var h=mo.total>0?Math.max(4,Math.round((mo.total/maxMo)*100)):0;
+      return '<div class="annual-bar-col">'+
+        '<div class="annual-bar-val">'+(mo.total>0?Math.round(mo.total):'')+'</div>'+
+        '<div class="annual-bar-track"><div class="annual-bar-fill" style="height:'+h+'%;background:var(--calm);"></div></div>'+
+        '<div class="annual-bar-label">'+MONTH_S[mo.m]+'</div>'+
+      '</div>';
+    }).join('');
+    html+='</div>';
+    var byCat={};
+    txs.forEach(function(t){ var c=t.category||'autre'; byCat[c]=(byCat[c]||0)+Math.abs(t.amount); });
+    var entries=Object.keys(byCat).map(function(id){ return {id:id,amount:byCat[id]}; }).sort(function(a,b){ return b.amount-a.amount; });
+    html+='<p class="section-title" style="margin-top:20px;">Top catégories</p>';
+    html+=entries.map(function(e){
+      var def=txCategoryDef(e.id), pct=Math.round((e.amount/totalYear)*100);
+      return '<div class="analytics-bar-row">'+
+        '<div class="analytics-bar-label">'+def.emoji+' <span>'+def.label+'</span></div>'+
+        '<div class="analytics-bar-track"><div class="analytics-bar-fill" style="width:'+pct+'%;background:'+def.color+';"></div></div>'+
+        '<div class="analytics-bar-val">'+Math.round(e.amount)+'€ <span style="color:var(--ink-faint);">('+pct+'%)</span></div>'+
+      '</div>';
+    }).join('');
+    wrap.innerHTML=html;
+  }
+
+  // ---- CSV parsing utilities ----
+  function detectSep(line){
+    var cands=[';',',','\t','|'];
+    var best=cands.map(function(c){ return {sep:c,n:(line.split(c).length-1)}; });
+    best.sort(function(a,b){ return b.n-a.n; });
+    return best[0].n>0?best[0].sep:',';
+  }
+  function parseCSVRow(line,sep){
+    var res=[],cur='',inQ=false;
+    for(var i=0;i<line.length;i++){
+      var ch=line[i];
+      if(ch==='"'){ if(inQ&&line[i+1]==='"'){cur+='"';i++;}else{inQ=!inQ;} }
+      else if(ch===sep&&!inQ){res.push(cur.trim());cur='';}
+      else{cur+=ch;}
+    }
+    res.push(cur.trim());
+    return res;
+  }
+  function parseCSVText(text){
+    var lines=text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(function(l){ return l.trim().length>0; });
+    if(!lines.length) return null;
+    var sep=detectSep(lines[0]);
+    return {rows:lines.map(function(l){ return parseCSVRow(l,sep); }),sep:sep};
+  }
+  function parseFrNum(str){
+    if(!str) return NaN;
+    var s=str.trim().replace(/ /g,'').replace(/ /g,'');
+    var dot=s.lastIndexOf('.');
+    var comma=s.lastIndexOf(',');
+    if(comma!==-1){
+      if(dot!==-1&&dot<comma) s=s.replace(/\./g,'').replace(',','.');
+      else if(dot===-1) s=s.replace(',','.');
+    }
+    return parseFloat(s);
+  }
+  function isDateLike(val){
+    if(!val||val.length<6) return false;
+    return /^\d{2}[\-\/\.]\d{2}[\-\/\.]\d{2,4}$/.test(val.trim())||/^\d{4}[\-\/\.]\d{2}[\-\/\.]\d{2}$/.test(val.trim());
+  }
+  function parseTxDate(str){
+    if(!str) return null;
+    var s=str.trim();
+    var m=s.match(/^(\d{4})[\-\/\.](\d{2})[\-\/\.](\d{2})/);
+    if(m) return m[1]+'-'+m[2]+'-'+m[3];
+    m=s.match(/^(\d{2})[\-\/\.](\d{2})[\-\/\.](\d{4})/);
+    if(m) return m[3]+'-'+m[2]+'-'+m[1];
+    m=s.match(/^(\d{2})[\-\/\.](\d{2})[\-\/\.](\d{2})$/);
+    if(m){ var yr=parseInt(m[3])<50?'20'+m[3]:'19'+m[3]; return yr+'-'+m[2]+'-'+m[1]; }
+    return null;
+  }
+  function txHash(date,label,amount){
+    return date+'|'+(label||'').replace(/\s+/g,'').toLowerCase().slice(0,25)+'|'+Math.round(parseFloat(amount)*100);
+  }
+  function detectColumns(rows){
+    if(rows.length<2) return {dateCol:-1,labelCol:-1,amountCol:-1,debitCol:-1,creditCol:-1};
+    var numCols=0;
+    rows.forEach(function(r){ if(r.length>numCols) numCols=r.length; });
+    var stats=[];
+    for(var c=0;c<numCols;c++){
+      var dN=0,nN=0,tN=0,mxL=0;
+      for(var r=1;r<Math.min(rows.length,11);r++){
+        var val=(rows[r][c]||'').trim();
+        if(isDateLike(val)) dN++;
+        if(!isNaN(parseFrNum(val))&&val.length>0) nN++;
+        if(val.length>5&&isNaN(parseFrNum(val.replace(',','.')))) tN++;
+        if(val.length>mxL) mxL=val.length;
+      }
+      stats.push({col:c,dN:dN,nN:nN,tN:tN,mxL:mxL});
+    }
+    var dateCol=-1,labelCol=-1,amountCol=-1,debitCol=-1,creditCol=-1;
+    var byD=stats.slice().sort(function(a,b){ return b.dN-a.dN; });
+    if(byD[0].dN>=2) dateCol=byD[0].col;
+    var hdrs=rows[0].map(function(h){ return (h||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); });
+    for(var hc=0;hc<hdrs.length;hc++){
+      var h=hdrs[hc];
+      if(/(debit|retrait|sortie|depense)/.test(h)) debitCol=hc;
+      else if(/(credit|depot|entree|versement)/.test(h)) creditCol=hc;
+      else if(/(montant|amount)/.test(h)&&amountCol===-1&&hc!==debitCol&&hc!==creditCol) amountCol=hc;
+      if(/(libelle|label|intitule|description|detail|operation|memo|ref)/.test(h)&&labelCol===-1) labelCol=hc;
+    }
+    var numCols2=stats.filter(function(s){ return s.nN>=2&&s.col!==dateCol&&s.col!==labelCol; });
+    if(amountCol===-1&&debitCol===-1&&numCols2.length>=1){
+      if(numCols2.length>=2){
+        numCols2.sort(function(a,b){ return a.col-b.col; });
+        debitCol=numCols2[numCols2.length-2].col;
+        creditCol=numCols2[numCols2.length-1].col;
+      } else { amountCol=numCols2[0].col; }
+    }
+    if(labelCol===-1){
+      var tCols=stats.filter(function(s){ return s.col!==dateCol&&s.col!==amountCol&&s.col!==debitCol&&s.col!==creditCol&&s.tN>=1; });
+      tCols.sort(function(a,b){ return b.mxL-a.mxL; });
+      if(tCols.length>0) labelCol=tCols[0].col;
+    }
+    return {dateCol:dateCol,labelCol:labelCol,amountCol:amountCol,debitCol:debitCol,creditCol:creditCol};
+  }
+  function classifyTx(label){
+    if(!label) return 'autre';
+    var norm=label.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]/g,' ');
+    var rules=state.finance.customRules||[];
+    for(var i=0;i<rules.length;i++) if(norm.indexOf(rules[i].pattern.toLowerCase())!==-1) return rules[i].category;
+    for(var j=0;j<TRANSACTION_CATEGORIES.length;j++){
+      var cat=TRANSACTION_CATEGORIES[j];
+      if(cat.id==='autre') continue;
+      for(var k=0;k<cat.kw.length;k++) if(norm.indexOf(cat.kw[k])!==-1) return cat.id;
+    }
+    return 'autre';
+  }
+
+  // ---- CSV Import Modal ----
+  function openCSVImport(accountId){
+    _csvParsed={rows:null,mapping:null,accountId:accountId};
+    var fi=document.getElementById('csv-file-input');
+    if(fi) fi.value='';
+    document.getElementById('csv-preview-info').textContent='';
+    document.getElementById('csv-col-map').style.display='none';
+    document.getElementById('csv-col-map').innerHTML='';
+    document.getElementById('csv-import-stats').style.display='none';
+    var cb=document.getElementById('csv-confirm');
+    if(cb){ cb.style.display='none'; cb.textContent='Importer'; cb.onclick=null; }
+    document.getElementById('modal-csv-import').style.display='flex';
+  }
+  function closeCSVImport(){
+    document.getElementById('modal-csv-import').style.display='none';
+    _csvParsed=null;
+  }
+  document.getElementById('close-csv-modal').addEventListener('click', closeCSVImport);
+  document.getElementById('csv-cancel').addEventListener('click', closeCSVImport);
+  document.getElementById('modal-csv-import').addEventListener('click', function(e){ if(e.target===this) closeCSVImport(); });
+
+  document.getElementById('csv-file-input').addEventListener('change', function(e){
+    var file=e.target.files[0];
+    if(!file) return;
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      var text=ev.target.result;
+      var parsed=parseCSVText(text);
+      if(!parsed||!parsed.rows||parsed.rows.length<2){
+        document.getElementById('csv-preview-info').textContent='Impossible de lire ce fichier. Vérifiez qu\'il s\'agit bien d\'un CSV valide.';
+        return;
+      }
+      var mapping=detectColumns(parsed.rows);
+      _csvParsed={rows:parsed.rows,mapping:mapping,accountId:_csvParsed?_csvParsed.accountId:null};
+      renderCSVPreview(parsed.rows,mapping);
+    };
+    reader.onerror=function(){ document.getElementById('csv-preview-info').textContent='Erreur de lecture du fichier.'; };
+    reader.readAsText(file,'UTF-8');
+  });
+
+  function renderCSVPreview(rows,mapping){
+    var infoEl=document.getElementById('csv-preview-info');
+    var mapEl=document.getElementById('csv-col-map');
+    var cb=document.getElementById('csv-confirm');
+    infoEl.textContent=(rows.length-1)+' lignes détectées · '+rows[0].length+' colonnes';
+    var noOpt='<option value="-1">— Ignorer —</option>';
+    var colOpts=rows[0].map(function(h,i){ return '<option value="'+i+'">Col '+(i+1)+' : '+escapeHtml((h||'—').slice(0,22))+'</option>'; }).join('');
+    function selFor(label,role,curCol){
+      return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'+
+        '<label style="font-size:12px;flex:0 0 65px;color:var(--ink-faint);">'+label+'</label>'+
+        '<select class="found-input csv-map-sel" data-role="'+role+'" style="flex:1;font-size:12px;padding:5px 6px;">'+noOpt+
+          rows[0].map(function(h,i){ return '<option value="'+i+'"'+(curCol===i?' selected':'')+'>Col '+(i+1)+' : '+escapeHtml((h||'—').slice(0,22))+'</option>'; }).join('')+
+        '</select></div>';
+    }
+    mapEl.innerHTML='<p style="font-size:12px;color:var(--ink-faint);margin:0 0 10px;">Assignation des colonnes :</p>'+
+      selFor('Date','date',mapping.dateCol)+
+      selFor('Libellé','label',mapping.labelCol)+
+      selFor('Montant','amount',mapping.amountCol)+
+      selFor('Débit','debit',mapping.debitCol)+
+      selFor('Crédit','credit',mapping.creditCol)+
+      '<div style="font-size:11px;color:var(--ink-faint);margin-top:6px;">Utilisez Débit/Crédit si votre banque sépare les entrées et sorties, sinon Montant (négatif = dépense).</div>';
+    mapEl.querySelectorAll('.csv-map-sel').forEach(function(sel){
+      sel.addEventListener('change', function(){ _csvParsed.mapping[sel.dataset.role+'Col']=parseInt(sel.value); });
+    });
+    mapEl.style.display='block';
+    if(cb){ cb.style.display='inline-block'; cb.textContent='Importer'; }
+  }
+
+  document.getElementById('csv-confirm').addEventListener('click', function(){
+    if(!_csvParsed||!_csvParsed.rows) return;
+    var cb=this;
+    if(cb.textContent==='Fermer'){ closeCSVImport(); return; }
+    var mapping=_csvParsed.mapping, rows=_csvParsed.rows, accountId=_csvParsed.accountId;
+    var hashes={};
+    (state.finance.transactions||[]).forEach(function(t){ if(t._hash) hashes[t._hash]=true; });
+    var imported=0,dupes=0,skipped=0;
+    for(var r=1;r<rows.length;r++){
+      var row=rows[r];
+      if(!row||row.length<2){skipped++;continue;}
+      var dateStr=mapping.dateCol>=0?parseTxDate(row[mapping.dateCol]||''):null;
+      if(!dateStr){skipped++;continue;}
+      var rawLabel=mapping.labelCol>=0?(row[mapping.labelCol]||'').trim():'';
+      var amount=NaN;
+      if(mapping.amountCol>=0){
+        amount=parseFrNum(row[mapping.amountCol]||'');
+      } else if(mapping.debitCol>=0||mapping.creditCol>=0){
+        var deb=mapping.debitCol>=0?parseFrNum(row[mapping.debitCol]||''):NaN;
+        var cred=mapping.creditCol>=0?parseFrNum(row[mapping.creditCol]||''):NaN;
+        if(!isNaN(deb)&&deb!==0) amount=-Math.abs(deb);
+        else if(!isNaN(cred)&&cred!==0) amount=Math.abs(cred);
+        else amount=0;
+      }
+      if(isNaN(amount)){skipped++;continue;}
+      var hash=txHash(dateStr,rawLabel,amount);
+      if(hashes[hash]){dupes++;continue;}
+      hashes[hash]=true;
+      if(!state.finance.transactions) state.finance.transactions=[];
+      state.finance.transactions.push({id:'tx'+Date.now()+'_'+r,accountId:accountId,date:dateStr,label:rawLabel,rawLabel:rawLabel,amount:amount,category:classifyTx(rawLabel),_hash:hash});
+      imported++;
+    }
+    saveData();
+    var statsEl=document.getElementById('csv-import-stats');
+    statsEl.innerHTML='<b>'+imported+'</b> transaction'+(imported>1?'s':'')+' importée'+(imported>1?'s':'')+
+      (dupes>0?' · <b>'+dupes+'</b> doublon'+(dupes>1?'s':'')+' ignoré'+(dupes>1?'s':''):'')+
+      (skipped>0?' · '+skipped+' ligne'+(skipped>1?'s':'')+' invalide'+(skipped>1?'s':''):'')+'.';
+    statsEl.style.display='block';
+    cb.textContent='Fermer';
+    renderFinanceComptes();
+  });
+
+  // ---- Ajouter compte ----
+  document.getElementById('add-account-btn').addEventListener('click', function(){
+    document.getElementById('acc-name-input').value='';
+    document.getElementById('acc-bank-input').value='';
+    document.getElementById('modal-add-account').style.display='flex';
+    setTimeout(function(){ var el=document.getElementById('acc-name-input'); if(el) el.focus(); },100);
+  });
+  function closeAddAccount(){ document.getElementById('modal-add-account').style.display='none'; }
+  document.getElementById('close-add-account').addEventListener('click', closeAddAccount);
+  document.getElementById('cancel-add-account').addEventListener('click', closeAddAccount);
+  document.getElementById('modal-add-account').addEventListener('click', function(e){ if(e.target===this) closeAddAccount(); });
+  document.getElementById('confirm-add-account').addEventListener('click', function(){
+    var name=document.getElementById('acc-name-input').value.trim();
+    if(!name) return;
+    if(!state.finance.accounts) state.finance.accounts=[];
+    var colorIdx=state.finance.accounts.length%ACCOUNT_COLORS.length;
+    state.finance.accounts.push({id:'acc'+Date.now(),name:name,bank:document.getElementById('acc-bank-input').value,color:ACCOUNT_COLORS[colorIdx],createdAt:Date.now()});
+    saveData(); closeAddAccount(); renderFinanceComptes();
+  });
+  document.getElementById('acc-name-input').addEventListener('keydown', function(e){
+    if(e.key==='Enter') document.getElementById('confirm-add-account').click();
+  });
+
+  // ---- Finance tabs ----
+  document.querySelectorAll('.finance-tab').forEach(function(btn){
+    btn.addEventListener('click', function(){ switchFinanceTab(btn.dataset.ftab); });
+  });
+
+  // ---- Analytics nav ----
+  document.getElementById('analytics-prev').addEventListener('click', function(){
+    if(_analyticsMode==='month'){
+      _analyticsPeriod.month--;
+      if(_analyticsPeriod.month<0){_analyticsPeriod.month=11;_analyticsPeriod.year--;}
+    } else { _analyticsPeriod.year--; }
+    renderAnalytics();
+  });
+  document.getElementById('analytics-next').addEventListener('click', function(){
+    if(_analyticsMode==='month'){
+      _analyticsPeriod.month++;
+      if(_analyticsPeriod.month>11){_analyticsPeriod.month=0;_analyticsPeriod.year++;}
+    } else { _analyticsPeriod.year++; }
+    renderAnalytics();
+  });
+  document.getElementById('analytics-mode').addEventListener('change', function(){
+    _analyticsMode=this.value; renderAnalytics();
+  });
+
+  // ---- TX filters ----
+  document.getElementById('tx-account-filter').addEventListener('change', renderTxList);
+  document.getElementById('tx-cat-filter').addEventListener('change', renderTxList);
+
+  // Init tx-cat-filter options
+  (function initTxCatFilter(){
+    var sel=document.getElementById('tx-cat-filter');
+    if(!sel) return;
+    sel.innerHTML='<option value="">Toutes catégories</option>'+
+      TRANSACTION_CATEGORIES.map(function(c){ return '<option value="'+c.id+'">'+c.emoji+' '+c.label+'</option>'; }).join('');
+  })();
 
   // ============ GÉOLOCALISATION ============
   var GEO_ANCHOR_KEY = 'boussole_geo_anchor';

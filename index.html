@@ -325,41 +325,119 @@
   </div>
 
   <div class="view" id="view-finance">
-    <div class="finance-grid">
-      <div class="finance-card">
-        <div class="finance-card-label">Revenus mensuels</div>
-        <div class="finance-card-value" id="finance-income-display">0 €</div>
-      </div>
-      <div class="finance-card">
-        <div class="finance-card-label">Dépenses mensuelles</div>
-        <div class="finance-card-value" id="finance-expense-display">0 €</div>
-      </div>
-      <div class="finance-card" style="grid-column:1/-1;">
-        <div class="finance-card-label">Marge disponible / mois</div>
-        <div class="finance-card-value" id="finance-margin-display">0 €</div>
-      </div>
+    <div class="finance-tabs">
+      <button class="finance-tab active" data-ftab="budget">Budget</button>
+      <button class="finance-tab" data-ftab="comptes">Comptes</button>
+      <button class="finance-tab" data-ftab="analyses">Analyses</button>
     </div>
 
-    <p class="section-title">Revenus</p>
-    <div id="income-list"></div>
-    <button class="btn sm" id="add-income-btn" style="margin-bottom:22px;"><i class="ti ti-plus"></i> Ajouter un revenu</button>
+    <div id="ftab-budget">
+      <div class="finance-grid">
+        <div class="finance-card">
+          <div class="finance-card-label">Revenus mensuels</div>
+          <div class="finance-card-value" id="finance-income-display">0 €</div>
+        </div>
+        <div class="finance-card">
+          <div class="finance-card-label">Dépenses mensuelles</div>
+          <div class="finance-card-value" id="finance-expense-display">0 €</div>
+        </div>
+        <div class="finance-card" style="grid-column:1/-1;">
+          <div class="finance-card-label">Marge disponible / mois</div>
+          <div class="finance-card-value" id="finance-margin-display">0 €</div>
+        </div>
+      </div>
+      <p class="section-title">Revenus</p>
+      <div id="income-list"></div>
+      <button class="btn sm" id="add-income-btn" style="margin-bottom:22px;"><i class="ti ti-plus"></i> Ajouter un revenu</button>
+      <p class="section-title">Dépenses</p>
+      <div id="expense-list"></div>
+      <button class="btn sm" id="add-expense-btn" style="margin-bottom:18px;"><i class="ti ti-plus"></i> Ajouter une dépense</button>
+      <div id="expense-chart-wrap" style="margin-bottom:26px;"></div>
+      <p class="section-title">Objectifs d'acquisition</p>
+      <p class="found-hint" style="margin-top:-6px;">Ce que tu veux acquérir, et le temps qu'il te faudrait pour épargner assez avec ta marge actuelle.</p>
+      <div class="goal-form">
+        <input type="text" class="found-input" id="savings-name-input" placeholder="Ex : Van, moto, vélo de course…">
+        <div class="goal-form-row">
+          <input type="number" class="found-input" id="savings-cost-input" placeholder="Coût estimé (€)" style="flex:1;">
+          <button class="btn primary" id="savings-add-btn" style="flex-shrink:0;"><i class="ti ti-plus"></i> Ajouter</button>
+        </div>
+      </div>
+      <div id="savings-list"></div>
+    </div>
 
-    <p class="section-title">Dépenses</p>
-    <div id="expense-list"></div>
-    <button class="btn sm" id="add-expense-btn" style="margin-bottom:18px;"><i class="ti ti-plus"></i> Ajouter une dépense</button>
+    <div id="ftab-comptes" style="display:none;">
+      <div id="accounts-wrap" style="margin-bottom:12px;"></div>
+      <button class="btn sm" id="add-account-btn" style="margin-bottom:16px;">+ Ajouter un compte</button>
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <select class="found-input" id="tx-account-filter" style="flex:1;font-size:12.5px;">
+          <option value="">Tous les comptes</option>
+        </select>
+        <select class="found-input" id="tx-cat-filter" style="flex:1;font-size:12.5px;">
+          <option value="">Toutes catégories</option>
+        </select>
+      </div>
+      <div id="tx-list"></div>
+    </div>
 
-    <div id="expense-chart-wrap" style="margin-bottom:26px;"></div>
+    <div id="ftab-analyses" style="display:none;">
+      <div class="finance-analytics-nav">
+        <button class="iconbtn sm" id="analytics-prev"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg></button>
+        <span id="analytics-period-label" style="flex:1;text-align:center;font-size:14px;font-weight:500;"></span>
+        <button class="iconbtn sm" id="analytics-next"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></button>
+        <select class="found-input" id="analytics-mode" style="width:80px;font-size:12px;padding:5px 6px;">
+          <option value="month">Mois</option>
+          <option value="year">Année</option>
+        </select>
+      </div>
+      <div id="analytics-wrap" style="margin-top:12px;"></div>
+    </div>
+  </div>
 
-    <p class="section-title">Objectifs d'acquisition</p>
-    <p class="found-hint" style="margin-top:-6px;">Ce que tu veux acquérir, et le temps qu'il te faudrait pour épargner assez avec ta marge actuelle.</p>
-    <div class="goal-form">
-      <input type="text" class="found-input" id="savings-name-input" placeholder="Ex : Van, moto, vélo de course…">
-      <div class="goal-form-row">
-        <input type="number" class="found-input" id="savings-cost-input" placeholder="Coût estimé (€)" style="flex:1;">
-        <button class="btn primary" id="savings-add-btn" style="flex-shrink:0;"><i class="ti ti-plus"></i> Ajouter</button>
+  <!-- MODAL: Ajouter un compte -->
+  <div id="modal-add-account" class="fixed-modal-backdrop" style="display:none;">
+    <div class="block-modal">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <span style="font-size:16px;font-weight:500;">Nouveau compte</span>
+        <button class="iconbtn" id="close-add-account" style="font-size:20px;line-height:1;">×</button>
+      </div>
+      <input type="text" class="found-input" id="acc-name-input" placeholder="Ex : Crédit Agricole Courant" style="margin-bottom:10px;">
+      <select class="found-input" id="acc-bank-input" style="margin-bottom:16px;">
+        <option value="">Banque (optionnel)</option>
+        <option value="ca">Crédit Agricole</option>
+        <option value="bnp">BNP Paribas</option>
+        <option value="sg">Société Générale</option>
+        <option value="lcl">LCL</option>
+        <option value="bp">Banque Populaire</option>
+        <option value="cm">Crédit Mutuel</option>
+        <option value="cep">Caisse d'Épargne</option>
+        <option value="rev">Revolut</option>
+        <option value="n26">N26</option>
+        <option value="autre">Autre</option>
+      </select>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn ghost sm" id="cancel-add-account">Annuler</button>
+        <button class="btn primary sm" id="confirm-add-account">Créer</button>
       </div>
     </div>
-    <div id="savings-list"></div>
+  </div>
+
+  <!-- MODAL: Import CSV -->
+  <div id="modal-csv-import" class="fixed-modal-backdrop" style="display:none;">
+    <div class="block-modal" style="max-height:80vh;overflow-y:auto;max-width:420px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <span style="font-size:16px;font-weight:500;">Importer un relevé CSV</span>
+        <button class="iconbtn" id="close-csv-modal" style="font-size:20px;line-height:1;">×</button>
+      </div>
+      <p class="found-hint" style="margin:0 0 10px;">Fichier CSV exporté depuis votre banque (Crédit Agricole, BNP, SG, Revolut, N26…)</p>
+      <input type="file" id="csv-file-input" accept=".csv,.txt,.tsv" style="margin-bottom:10px;font-size:13px;color:var(--ink);width:100%;">
+      <div id="csv-preview-info" style="font-size:12.5px;color:var(--ink-dim);margin-bottom:10px;"></div>
+      <div id="csv-col-map" style="display:none;margin-bottom:12px;"></div>
+      <div id="csv-import-stats" style="display:none;font-size:13px;color:var(--accent);margin-bottom:10px;padding:10px;background:var(--bg-raised);border-radius:8px;"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px;">
+        <button class="btn ghost sm" id="csv-cancel">Annuler</button>
+        <button class="btn primary sm" id="csv-confirm" style="display:none;">Importer</button>
+      </div>
+    </div>
   </div>
 
   <!-- PAGE D'ENTRÉE : TÂCHES / OBJECTIFS -->
