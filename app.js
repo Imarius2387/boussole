@@ -351,6 +351,22 @@
     // Purge des anciennes tâches de l'ancien système (qui avaient 'done', 'importance', 'effort' au lieu de
     // 'status' et 'urgency') : l'utilisateur a demandé de repartir à zéro sur les tâches courtes.
     result.tasks = result.tasks.filter(function(t){ return t.urgency !== undefined; });
+    // Migration : ajouter les champs deadline et priority si absents
+    (function(){
+      var byGroup = {};
+      result.tasks.forEach(function(t){
+        if(t.deadline===undefined) t.deadline=null;
+        if(t.priority===undefined||t.priority===null){
+          var u=t.urgency||'week';
+          if(!byGroup[u]) byGroup[u]=[];
+          byGroup[u].push(t);
+        }
+      });
+      Object.keys(byGroup).forEach(function(u){
+        byGroup[u].sort(function(a,b){return (a.createdAt||'').localeCompare(b.createdAt||'');});
+        byGroup[u].forEach(function(t,i){t.priority=i;});
+      });
+    })();
     // Rétrocompatibilité : les routines créées avant cette version n'ont pas de type, elles deviennent
     // 'libre' par défaut, ce qui correspond exactement à leur comportement d'avant (aucun changement visible).
     if(result.recurring) result.recurring.forEach(function(r){ if(!r.type) r.type = 'libre'; });
@@ -3153,12 +3169,14 @@
   // ============ TÂCHES & OBJECTIFS : HUB + TASKS ============
 
   var URGENCY_LABELS = {
-    'hour':  { label: 'Dans l\'heure',  cls: 'urgency-hour',  order: 0 },
-    'day':   { label: 'Aujourd\'hui',   cls: 'urgency-day',   order: 1 },
-    '2days': { label: 'Dans 2 jours',   cls: 'urgency-2days', order: 2 },
-    'week':  { label: 'Cette semaine',  cls: 'urgency-week',  order: 3 },
-    'month': { label: 'Ce mois',        cls: 'urgency-month', order: 4 }
+    'hour':  { label: 'Dans l\'heure', cls: 'urgency-hour',   order: 0, color: '#F87171', short: '⚡ Heure' },
+    'day':   { label: 'Aujourd\'hui',  cls: 'urgency-day',    order: 1, color: '#FB923C', short: '📅 Auj.' },
+    '2days': { label: 'Dans 2 jours',  cls: 'urgency-2days',  order: 2, color: '#FBBF24', short: '🗓 2j' },
+    'week':  { label: 'Cette semaine', cls: 'urgency-week',   order: 3, color: '#6EBF8B', short: '📆 Semaine' },
+    'month': { label: 'Ce mois',       cls: 'urgency-month',  order: 4, color: '#60A5FA', short: '📊 Mois' },
+    'custom':{ label: 'Date précise',  cls: 'urgency-custom', order: 5, color: '#A78BFA', short: '📍 Date…' }
   };
+  var _taskUrg = 'week';
 
   function renderHub(){
     var openTasks = state.tasks.filter(function(t){ return t.status!=='done'; }).length;
@@ -3184,28 +3202,115 @@
   var goalsBackBtn = document.getElementById('goals-back-btn');
   if(goalsBackBtn) goalsBackBtn.addEventListener('click', function(){ switchToView('list'); });
 
+  // ---- Helpers tâches : deadline & priorité ----
+  function pad2(v){ return String(v).padStart(2,'0'); }
+  function todayISO(){
+    var n=new Date();
+    return n.getFullYear()+'-'+pad2(n.getMonth()+1)+'-'+pad2(n.getDate());
+  }
+  function computeTaskDeadline(urg, timeVal, customN, customUnit, customDate, customTime){
+    if(urg==='custom'){
+      var d=null;
+      if(customDate){
+        d=new Date(customDate+'T12:00:00');
+      } else if(customN){
+        d=new Date();
+        var n=parseInt(customN)||1;
+        if(customUnit==='d') d.setDate(d.getDate()+n);
+        else if(customUnit==='w') d.setDate(d.getDate()+n*7);
+        else if(customUnit==='m') d.setMonth(d.getMonth()+n);
+      }
+      if(!d) return null;
+      var s=d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
+      return customTime ? s+'T'+customTime : s;
+    }
+    if((urg==='hour'||urg==='day')&&timeVal){
+      return todayISO()+'T'+timeVal;
+    }
+    return null;
+  }
+  function taskDeadlineLabel(t){
+    var ul=URGENCY_LABELS[t.urgency]||URGENCY_LABELS['week'];
+    if(!t.deadline) return ul.label;
+    var raw=t.deadline;
+    var hasTime=raw.includes('T');
+    var timePart=hasTime?' '+raw.slice(11,16):'';
+    var dDate=new Date(raw.slice(0,10)+'T12:00:00');
+    var today=new Date(); today.setHours(0,0,0,0);
+    var diff=Math.round((dDate-today)/86400000);
+    var MONTHS=['jan','fév','mar','avr','mai','juin','juil','aoû','sep','oct','nov','déc'];
+    var WDAYS=['dim','lun','mar','mer','jeu','ven','sam'];
+    if(diff<0) return 'En retard'+timePart;
+    if(diff===0) return 'Auj.'+timePart;
+    if(diff===1) return 'Demain'+timePart;
+    if(diff<7) return WDAYS[dDate.getDay()]+'.'+timePart;
+    var yr=dDate.getFullYear()!==today.getFullYear()?' '+dDate.getFullYear():'';
+    return dDate.getDate()+' '+MONTHS[dDate.getMonth()]+yr+timePart;
+  }
+  function moveTaskPriority(taskId, dir){
+    var t=findItem(state.tasks,{id:taskId});
+    if(!t) return;
+    var group=state.tasks.filter(function(t2){return t2.status!=='done'&&t2.urgency===t.urgency;})
+      .sort(function(a,b){
+        var pa=a.priority!==undefined?a.priority:999;
+        var pb=b.priority!==undefined?b.priority:999;
+        if(pa!==pb) return pa-pb;
+        return (a.createdAt||'').localeCompare(b.createdAt||'');
+      });
+    group.forEach(function(t2,i){t2.priority=i;});
+    var idx=-1;
+    for(var i=0;i<group.length;i++){if(group[i].id===taskId){idx=i;break;}}
+    if(idx<0) return;
+    var si=dir==='up'?idx-1:idx+1;
+    if(si<0||si>=group.length) return;
+    var tmp=group[idx].priority; group[idx].priority=group[si].priority; group[si].priority=tmp;
+    saveData(); renderTasks();
+  }
+
   // Ajout d'une tâche
   var taskInput = document.getElementById('task-input');
   var taskAddBtn = document.getElementById('task-add-btn');
+
+  // Urgency button wiring
+  document.querySelectorAll('#task-capture-wrap .task-urg-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      document.querySelectorAll('#task-capture-wrap .task-urg-btn').forEach(function(b){b.classList.remove('active');});
+      btn.classList.add('active');
+      _taskUrg=btn.dataset.urg;
+      var timeRow=document.getElementById('task-time-row');
+      var custRow=document.getElementById('task-custom-row');
+      timeRow.style.display=(_taskUrg==='hour'||_taskUrg==='day')?'block':'none';
+      custRow.style.display=(_taskUrg==='custom')?'block':'none';
+    });
+  });
+
   if(taskAddBtn){
     function addTask(){
-      var text = taskInput.value.trim();
+      var text=taskInput.value.trim();
       if(!text) return;
-      var urgency = document.getElementById('task-urgency').value || 'week';
-      var durRaw = parseInt(document.getElementById('task-duration').value);
-      var det = detectPillar(text);
+      var timeVal=(document.getElementById('task-deadline-time')||{}).value||'';
+      var customN=(document.getElementById('task-custom-n')||{}).value||'';
+      var customUnit=(document.getElementById('task-custom-unit')||{}).value||'w';
+      var customDate=(document.getElementById('task-custom-date')||{}).value||'';
+      var customTime=(document.getElementById('task-custom-time')||{}).value||'';
+      var deadline=computeTaskDeadline(_taskUrg,timeVal,customN,customUnit,customDate,customTime);
+      var durRaw=parseInt(document.getElementById('task-duration').value);
+      var det=detectPillar(text);
+      var grp=state.tasks.filter(function(t){return t.urgency===_taskUrg&&t.status!=='done';});
+      var maxP=grp.reduce(function(m,t){return Math.max(m,t.priority!==undefined?t.priority:0);},- 1);
       state.tasks.push({
         id:'t'+Date.now()+Math.floor(Math.random()*1000),
-        text: text,
-        urgency: urgency,
-        durationMinutes: isNaN(durRaw) ? null : durRaw,
-        pillarId: det.pillar || 'personnel',
-        createdAt: new Date().toISOString(),
-        status: 'todo',
-        doneAt: null
+        text:text, urgency:_taskUrg, deadline:deadline, priority:maxP+1,
+        durationMinutes:isNaN(durRaw)?null:durRaw,
+        pillarId:det.pillar||'personnel',
+        createdAt:new Date().toISOString(), status:'todo', doneAt:null
       });
-      taskInput.value = '';
-      document.getElementById('task-duration').value = '';
+      taskInput.value='';
+      if(document.getElementById('task-deadline-time')) document.getElementById('task-deadline-time').value='';
+      if(document.getElementById('task-custom-n')) document.getElementById('task-custom-n').value='';
+      if(document.getElementById('task-custom-date')) document.getElementById('task-custom-date').value='';
+      if(document.getElementById('task-custom-time')) document.getElementById('task-custom-time').value='';
+      document.getElementById('task-duration').value='';
       saveData(); renderTasks(); renderNow(); renderHub();
     }
     taskAddBtn.addEventListener('click', addTask);
@@ -3213,67 +3318,75 @@
   }
 
   function renderTasks(){
-    var wrap = document.getElementById('tasks-list');
+    var wrap=document.getElementById('tasks-list');
     if(!wrap) return;
-    // Tri : urgence croissante (heure < jour < 2j < semaine < mois), puis par date de création
-    var todos = state.tasks.filter(function(t){ return t.status!=='done'; })
+    var todos=state.tasks.filter(function(t){return t.status!=='done';})
       .sort(function(a,b){
-        var ua = (URGENCY_LABELS[a.urgency]||URGENCY_LABELS['week']).order;
-        var ub = (URGENCY_LABELS[b.urgency]||URGENCY_LABELS['week']).order;
+        var ua=(URGENCY_LABELS[a.urgency]||URGENCY_LABELS['week']).order;
+        var ub=(URGENCY_LABELS[b.urgency]||URGENCY_LABELS['week']).order;
         if(ua!==ub) return ua-ub;
+        // pour custom : trier par deadline d'abord
+        if(a.deadline&&b.deadline&&a.deadline!==b.deadline) return a.deadline<b.deadline?-1:1;
+        var pa=a.priority!==undefined?a.priority:999;
+        var pb=b.priority!==undefined?b.priority:999;
+        if(pa!==pb) return pa-pb;
         return (a.createdAt||'').localeCompare(b.createdAt||'');
       });
-    var dones = state.tasks.filter(function(t){ return t.status==='done'; })
-      .sort(function(a,b){ return (b.doneAt||'').localeCompare(a.doneAt||''); })
-      .slice(0,5); // afficher seulement les 5 dernières complétées
-
-    if(!todos.length && !dones.length){
-      wrap.innerHTML = '<p class="found-hint" style="text-align:center;margin-top:30px;">Aucune tâche pour l\'instant. Ajoute ta première tâche ci-dessus.</p>';
+    var dones=state.tasks.filter(function(t){return t.status==='done';})
+      .sort(function(a,b){return (b.doneAt||'').localeCompare(a.doneAt||'');})
+      .slice(0,5);
+    if(!todos.length&&!dones.length){
+      wrap.innerHTML='<p class="found-hint" style="text-align:center;margin-top:30px;">Aucune tâche. Ajoute ta première tâche ci-dessus.</p>';
       return;
     }
-
-    var html = '';
-    // Grouper les à-faire par niveau d'urgence
-    var groups = {};
-    todos.forEach(function(t){
-      var u = t.urgency || 'week';
-      if(!groups[u]) groups[u] = [];
-      groups[u].push(t);
+    var html='';
+    var groups={},gOrder=['hour','day','2days','week','month','custom'];
+    todos.forEach(function(t){var u=t.urgency||'week';if(!groups[u])groups[u]=[];groups[u].push(t);});
+    gOrder.forEach(function(u){
+      if(!groups[u]||!groups[u].length) return;
+      var ul=URGENCY_LABELS[u]||URGENCY_LABELS['week'];
+      html+='<div class="tasks-group-label" style="color:'+ul.color+';">'+ul.label+
+        ' <span style="font-weight:400;opacity:0.7;">('+groups[u].length+')</span></div>';
+      html+=groups[u].map(function(t,i){return renderTaskItem(t,groups[u],i);}).join('');
     });
-    ['hour','day','2days','week','month'].forEach(function(u){
-      if(!groups[u] || !groups[u].length) return;
-      var ul = URGENCY_LABELS[u];
-      html += '<div class="tasks-group-label">'+ul.label+'</div>';
-      html += groups[u].map(function(t){ return renderTaskItem(t); }).join('');
-    });
-
     if(dones.length){
-      html += '<div class="tasks-group-label" style="margin-top:24px;opacity:0.5;">Récemment terminées</div>';
-      html += dones.map(function(t){ return renderTaskItem(t); }).join('');
+      html+='<div class="tasks-group-label" style="margin-top:24px;opacity:0.5;color:var(--ink-faint);">Terminées récemment</div>';
+      html+=dones.map(function(t){return renderTaskItem(t,null,0);}).join('');
     }
-    wrap.innerHTML = html;
+    wrap.innerHTML=html;
     attachTaskListeners(wrap);
   }
 
-  function renderTaskItem(t){
-    var isDone = t.status==='done';
-    var ul = URGENCY_LABELS[t.urgency] || URGENCY_LABELS['week'];
-    var col = pillarColor(t.pillarId||'personnel');
-    var durTxt = t.durationMinutes ? '~'+t.durationMinutes+' min' : '';
-    return '<div class="task-item" data-taskid="'+t.id+'">'+
+  function renderTaskItem(t,groupArr,groupIdx){
+    var isDone=t.status==='done';
+    var ul=URGENCY_LABELS[t.urgency]||URGENCY_LABELS['week'];
+    var col=pillarColor(t.pillarId||'personnel');
+    var bColor=isDone?'var(--card-border)':ul.color;
+    var dlLabel=taskDeadlineLabel(t);
+    var durTxt=t.durationMinutes?'⏱ ~'+t.durationMinutes+' min':'';
+    var prioHtml='';
+    if(!isDone&&groupArr&&groupArr.length>1){
+      var canUp=groupIdx>0, canDown=groupIdx<groupArr.length-1;
+      prioHtml='<div class="task-prio-btns">'+
+        '<button class="task-prio-btn" data-prio-up="'+t.id+'"'+(canUp?'':' disabled')+'>▲</button>'+
+        '<button class="task-prio-btn" data-prio-down="'+t.id+'"'+(canDown?'':' disabled')+'>▼</button>'+
+      '</div>';
+    }
+    return '<div class="task-item" data-taskid="'+t.id+'" style="border-left-color:'+bColor+';">'+
       '<div class="task-check'+(isDone?' done':'')+'" data-checktask="'+t.id+'">'+
-        (isDone ? '<i class="ti ti-check" style="font-size:11px;color:#0F1A0E;"></i>' : '')+
+        (isDone?svgIcon('check',11):'')+
       '</div>'+
       '<div class="task-body">'+
         '<div class="task-text'+(isDone?' done':'')+'">'+escapeHtml(t.text)+'</div>'+
         '<div class="task-meta">'+
-          (!isDone ? '<span class="urgency-badge '+ul.cls+'">'+ul.label+'</span>' : '')+
-          (durTxt ? '<span>⏱ '+durTxt+'</span>' : '')+
+          (!isDone?'<span class="urgency-badge '+ul.cls+'">'+dlLabel+'</span>':'')+
+          (durTxt?'<span>'+durTxt+'</span>':'')+
           '<span style="color:'+col+';">'+pillarLabel(t.pillarId||'personnel')+'</span>'+
         '</div>'+
       '</div>'+
+      prioHtml+
       '<div class="task-actions">'+
-        (!isDone ? '<span class="svg-icon-btn" data-edittask="'+t.id+'" title="Modifier">'+svgIcon('pencil',13)+'</span>' : '')+
+        (!isDone?'<span class="svg-icon-btn" data-edittask="'+t.id+'" title="Modifier">'+svgIcon('pencil',13)+'</span>':'')+
         '<span class="svg-icon-btn" data-deltask="'+t.id+'" title="Supprimer">'+svgIcon('x',14)+'</span>'+
       '</div>'+
     '</div>';
@@ -3281,48 +3394,79 @@
 
   function attachTaskListeners(wrap){
     wrap.querySelectorAll('[data-checktask]').forEach(function(el){
-      el.addEventListener('click', function(){
-        var t = findItem(state.tasks, {id:el.dataset.checktask});
+      el.addEventListener('click',function(){
+        var t=findItem(state.tasks,{id:el.dataset.checktask});
         if(!t) return;
-        t.status = t.status==='done' ? 'todo' : 'done';
-        t.doneAt = t.status==='done' ? new Date().toISOString() : null;
+        t.status=t.status==='done'?'todo':'done';
+        t.doneAt=t.status==='done'?new Date().toISOString():null;
         saveData(); renderTasks(); renderNow(); renderHub();
       });
     });
     wrap.querySelectorAll('[data-deltask]').forEach(function(el){
-      el.addEventListener('click', function(){
-        state.tasks = state.tasks.filter(function(t){ return t.id!==el.dataset.deltask; });
+      el.addEventListener('click',function(){
+        state.tasks=state.tasks.filter(function(t){return t.id!==el.dataset.deltask;});
         saveData(); renderTasks(); renderHub();
       });
     });
+    wrap.querySelectorAll('[data-prio-up],[data-prio-down]').forEach(function(el){
+      el.addEventListener('click',function(){
+        var id=el.dataset.prioUp||el.dataset.prioDown;
+        var dir=el.dataset.prioUp?'up':'down';
+        moveTaskPriority(id,dir);
+      });
+    });
     wrap.querySelectorAll('[data-edittask]').forEach(function(el){
-      el.addEventListener('click', function(){
-        var t = findItem(state.tasks, {id:el.dataset.edittask});
+      el.addEventListener('click',function(){
+        var t=findItem(state.tasks,{id:el.dataset.edittask});
         if(!t) return;
-        var item = el.closest('.task-item');
-        var ul = URGENCY_LABELS[t.urgency]||URGENCY_LABELS['week'];
-        item.innerHTML =
+        var item=el.closest('.task-item');
+        var eUrg=t.urgency||'week';
+        var hasTime=t.deadline&&t.deadline.includes('T');
+        var timeVal=hasTime?t.deadline.slice(11,16):'';
+        var dateVal=t.deadline?t.deadline.slice(0,10):'';
+        var urgBtns=['hour','day','2days','week','month','custom'].map(function(u){
+          var ul=URGENCY_LABELS[u];
+          return '<button class="task-urg-btn'+(eUrg===u?' active':'')+'" data-eurg="'+u+'">'+ul.short+'</button>';
+        }).join('');
+        item.innerHTML=
           '<div style="flex:1;">'+
           '<input type="text" class="found-input" id="edit-task-text" value="'+escapeHtml(t.text)+'" style="margin-bottom:8px;">'+
-          '<div class="goal-form-row">'+
-            '<select class="found-input" id="edit-task-urgency" style="flex:2;">'+
-              Object.keys(URGENCY_LABELS).map(function(u){ return '<option value="'+u+'"'+(t.urgency===u?' selected':'')+'>'+URGENCY_LABELS[u].label+'</option>'; }).join('')+
-            '</select>'+
-            '<input type="number" class="found-input" id="edit-task-dur" value="'+(t.durationMinutes||'')+'" placeholder="min" style="flex:1;" min="5" step="5">'+
+          '<div class="task-urg-row" id="edit-urg-row" style="margin-bottom:8px;">'+urgBtns+'</div>'+
+          '<div id="edit-time-row" style="display:'+((eUrg==='hour'||eUrg==='day')?'block':'none')+';margin-bottom:6px;">'+
+            '<input type="time" class="found-input" id="edit-task-time" value="'+timeVal+'" style="width:130px;padding:4px 8px;">'+
           '</div>'+
-          '<div class="goal-form-row" style="margin-top:8px;">'+
+          '<div id="edit-custom-row" style="display:'+(eUrg==='custom'?'block':'none')+';margin-bottom:6px;padding:8px;background:var(--bg-input);border-radius:6px;border:1px solid var(--card-border);">'+
+            '<input type="date" class="found-input" id="edit-task-date" value="'+dateVal+'" style="margin-bottom:4px;">'+
+            '<input type="time" class="found-input" id="edit-task-ctime" value="'+timeVal+'" style="width:130px;padding:4px 8px;margin-top:4px;">'+
+          '</div>'+
+          '<div class="goal-form-row" style="margin-top:6px;">'+
+            '<input type="number" class="found-input" id="edit-task-dur" value="'+(t.durationMinutes||'')+'" placeholder="min" style="flex:1;" min="5" step="5">'+
             '<button class="btn primary sm" id="edit-task-save">Enregistrer</button>'+
             '<button class="btn ghost sm" id="edit-task-cancel">Annuler</button>'+
           '</div></div>';
-        item.querySelector('#edit-task-save').addEventListener('click', function(){
-          var newText = item.querySelector('#edit-task-text').value.trim();
-          if(newText) t.text = newText;
-          t.urgency = item.querySelector('#edit-task-urgency').value;
-          var durRaw = parseInt(item.querySelector('#edit-task-dur').value);
-          t.durationMinutes = isNaN(durRaw) ? null : durRaw;
+        item.querySelectorAll('.task-urg-btn').forEach(function(btn){
+          btn.addEventListener('click',function(){
+            item.querySelectorAll('.task-urg-btn').forEach(function(b){b.classList.remove('active');});
+            btn.classList.add('active'); eUrg=btn.dataset.eurg;
+            var tr=item.querySelector('#edit-time-row');
+            var cr=item.querySelector('#edit-custom-row');
+            if(tr) tr.style.display=(eUrg==='hour'||eUrg==='day')?'block':'none';
+            if(cr) cr.style.display=eUrg==='custom'?'block':'none';
+          });
+        });
+        item.querySelector('#edit-task-save').addEventListener('click',function(){
+          var newText=item.querySelector('#edit-task-text').value.trim();
+          if(newText) t.text=newText;
+          t.urgency=eUrg;
+          var tv=(item.querySelector('#edit-task-time')||{}).value||'';
+          var dv=(item.querySelector('#edit-task-date')||{}).value||'';
+          var ctv=(item.querySelector('#edit-task-ctime')||{}).value||'';
+          t.deadline=computeTaskDeadline(eUrg,tv,'','',dv,ctv);
+          var dr=parseInt(item.querySelector('#edit-task-dur').value);
+          t.durationMinutes=isNaN(dr)?null:dr;
           saveData(); renderTasks();
         });
-        item.querySelector('#edit-task-cancel').addEventListener('click', function(){ renderTasks(); });
+        item.querySelector('#edit-task-cancel').addEventListener('click',function(){renderTasks();});
       });
     });
   }

@@ -488,15 +488,36 @@
       <span class="section-title" style="margin:0;">Tâches</span>
     </div>
     <div id="task-capture-wrap" style="margin-bottom:16px;">
-      <input type="text" class="found-input" id="task-input" placeholder="Nouvelle tâche…" style="margin-bottom:8px;">
-      <div class="goal-form-row">
-        <select class="found-input" id="task-urgency" style="flex:2;">
-          <option value="hour">Dans l'heure</option>
-          <option value="day">Dans la journée</option>
-          <option value="2days">Dans 2 jours</option>
-          <option value="week" selected>Dans la semaine</option>
-          <option value="month">Dans le mois</option>
-        </select>
+      <input type="text" class="found-input" id="task-input" placeholder="Nouvelle tâche…" style="margin-bottom:2px;">
+      <div class="task-urg-row">
+        <button class="task-urg-btn" data-urg="hour">⚡ Heure</button>
+        <button class="task-urg-btn" data-urg="day">📅 Aujourd'hui</button>
+        <button class="task-urg-btn" data-urg="2days">🗓 2 jours</button>
+        <button class="task-urg-btn active" data-urg="week">📆 Semaine</button>
+        <button class="task-urg-btn" data-urg="month">📊 Mois</button>
+        <button class="task-urg-btn" data-urg="custom">📍 Date…</button>
+      </div>
+      <div id="task-time-row" style="display:none;margin-top:8px;display:none;">
+        <span style="font-size:12px;color:var(--ink-faint);">Heure limite (optionnel) :</span>
+        <input type="time" class="found-input" id="task-deadline-time" style="width:130px;margin-left:8px;padding:4px 8px;display:inline-block;">
+      </div>
+      <div id="task-custom-row" style="display:none;margin-top:8px;padding:10px;background:var(--bg-input);border-radius:var(--radius-sm);border:1px solid var(--card-border);">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <span style="font-size:12.5px;color:var(--ink-dim);white-space:nowrap;">Dans</span>
+          <input type="number" class="found-input" id="task-custom-n" min="1" max="999" placeholder="3" style="width:64px;padding:4px 8px;">
+          <select class="found-input" id="task-custom-unit" style="flex:1;font-size:13px;">
+            <option value="d">jours</option>
+            <option value="w" selected>semaines</option>
+            <option value="m">mois</option>
+          </select>
+        </div>
+        <div style="font-size:11px;color:var(--ink-faint);text-align:center;margin-bottom:8px;">— ou date précise —</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <input type="date" class="found-input" id="task-custom-date" style="flex:1;min-width:130px;padding:4px 8px;">
+          <input type="time" class="found-input" id="task-custom-time" style="width:115px;padding:4px 8px;">
+        </div>
+      </div>
+      <div class="goal-form-row" style="margin-top:8px;">
         <input type="number" class="found-input" id="task-duration" placeholder="min" min="5" step="5" style="flex:1;" title="Durée estimée en minutes">
         <button class="btn primary sm" id="task-add-btn"><i class="ti ti-plus"></i></button>
       </div>
