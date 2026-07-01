@@ -402,17 +402,39 @@
       </div>
       <input type="text" class="found-input" id="acc-name-input" placeholder="Ex : Crédit Agricole Courant" style="margin-bottom:10px;">
       <select class="found-input" id="acc-bank-input" style="margin-bottom:16px;">
-        <option value="">Banque (optionnel)</option>
-        <option value="ca">Crédit Agricole</option>
-        <option value="bnp">BNP Paribas</option>
-        <option value="sg">Société Générale</option>
-        <option value="lcl">LCL</option>
-        <option value="bp">Banque Populaire</option>
-        <option value="cm">Crédit Mutuel</option>
-        <option value="cep">Caisse d'Épargne</option>
-        <option value="rev">Revolut</option>
-        <option value="n26">N26</option>
-        <option value="autre">Autre</option>
+        <option value="">— Sélectionner une banque —</option>
+        <optgroup label="Banques traditionnelles">
+          <option value="ca">Crédit Agricole</option>
+          <option value="bnp">BNP Paribas</option>
+          <option value="sg">Société Générale</option>
+          <option value="lcl">LCL</option>
+          <option value="bp">Banque Populaire</option>
+          <option value="cm">Crédit Mutuel</option>
+          <option value="cep">Caisse d'Épargne</option>
+          <option value="lbp">La Banque Postale</option>
+          <option value="cic">CIC</option>
+          <option value="hsbc">HSBC France</option>
+        </optgroup>
+        <optgroup label="Banques en ligne">
+          <option value="bourso">Boursorama Banque</option>
+          <option value="hello">Hello bank! (BNP)</option>
+          <option value="fortuneo">Fortuneo</option>
+          <option value="monabanq">Monabanq</option>
+          <option value="orange">Orange Bank</option>
+          <option value="bforbank">BforBank</option>
+          <option value="floa">Floa Bank</option>
+        </optgroup>
+        <optgroup label="Néo-banques">
+          <option value="rev">Revolut</option>
+          <option value="n26">N26</option>
+          <option value="wise">Wise</option>
+          <option value="nickel">Nickel</option>
+          <option value="lydia">Lydia / Sumeria</option>
+          <option value="qonto">Qonto (pro)</option>
+          <option value="shine">Shine (pro)</option>
+          <option value="paypal">PayPal</option>
+          <option value="sogexia">Sogexia</option>
+        </optgroup>
       </select>
       <div style="display:flex;gap:8px;justify-content:flex-end;">
         <button class="btn ghost sm" id="cancel-add-account">Annuler</button>
@@ -428,8 +450,8 @@
         <span style="font-size:16px;font-weight:500;">Importer un relevé CSV</span>
         <button class="iconbtn" id="close-csv-modal" style="font-size:20px;line-height:1;">×</button>
       </div>
-      <p class="found-hint" style="margin:0 0 10px;">Fichier CSV exporté depuis votre banque (Crédit Agricole, BNP, SG, Revolut, N26…)</p>
-      <input type="file" id="csv-file-input" accept=".csv,.txt,.tsv" style="margin-bottom:10px;font-size:13px;color:var(--ink);width:100%;">
+      <p class="found-hint" style="margin:0 0 10px;">Relevé PDF ou CSV exporté depuis votre banque. Autant de relevés que vous voulez.</p>
+      <input type="file" id="csv-file-input" accept=".csv,.txt,.tsv,.pdf" style="margin-bottom:10px;font-size:13px;color:var(--ink);width:100%;">
       <div id="csv-preview-info" style="font-size:12.5px;color:var(--ink-dim);margin-bottom:10px;"></div>
       <div id="csv-col-map" style="display:none;margin-bottom:12px;"></div>
       <div id="csv-import-stats" style="display:none;font-size:13px;color:var(--accent);margin-bottom:10px;padding:10px;background:var(--bg-raised);border-radius:8px;"></div>
@@ -827,6 +849,7 @@
     navigator.serviceWorker.register('/boussole/sw.js').catch(function(){});
   }
 </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

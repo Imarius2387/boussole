@@ -4280,6 +4280,153 @@
     return 'autre';
   }
 
+  // ---- PDF.js init ----
+  (function(){
+    if(typeof pdfjsLib !== 'undefined'){
+      pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+  })();
+
+  // ---- PDF parsing ----
+  function parsePDFFile(file, onDone){
+    if(typeof pdfjsLib === 'undefined'){
+      onDone(null,'PDF.js non chargé — vérifiez votre connexion internet.');
+      return;
+    }
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      var arr=new Uint8Array(ev.target.result);
+      pdfjsLib.getDocument({data:arr}).promise.then(function(pdf){
+        var ps=[];
+        for(var p=1;p<=pdf.numPages;p++) ps.push(p);
+        return Promise.all(ps.map(function(p){
+          return pdf.getPage(p).then(function(page){
+            var vp=page.getViewport({scale:1});
+            return page.getTextContent().then(function(tc){
+              return {items:tc.items, h:vp.height};
+            });
+          });
+        }));
+      }).then(function(pages){
+        onDone(pdfExtractTx(pages), null);
+      }).catch(function(e){
+        onDone(null,'Impossible de lire ce PDF : '+e.message);
+      });
+    };
+    reader.onerror=function(){ onDone(null,'Erreur de lecture du fichier.'); };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function pdfExtractTx(pages){
+    var items=[], yOff=0;
+    pages.forEach(function(pg){
+      var h=pg.h;
+      pg.items.forEach(function(it){
+        if(!it.str||!it.str.trim()) return;
+        items.push({x:Math.round(it.transform[4]), y:Math.round(yOff+(h-it.transform[5])), t:it.str.trim()});
+      });
+      yOff+=Math.round(h)+40;
+    });
+    if(!items.length) return [];
+    // Group into lines by Y (tolerance 3px)
+    items.sort(function(a,b){ return a.y-b.y||a.x-b.x; });
+    var lines=[],curY=-9999,cur=[];
+    items.forEach(function(it){
+      if(it.y-curY>3){ if(cur.length) lines.push(cur.slice()); cur=[it]; curY=it.y; }
+      else{ cur.push(it); if(it.y>curY) curY=it.y; }
+    });
+    if(cur.length) lines.push(cur);
+    lines=lines.map(function(l){ l.sort(function(a,b){return a.x-b.x;}); return l; });
+    // Detect transaction lines
+    var DATE_RE=/\b(\d{2}[\/\.\-]\d{2}[\/\.\-]\d{2,4})\b/;
+    var NUM_RE=/^-?\d[\d\s]*[,\.]\d{2}$/;
+    var SKIP_RE=/total|solde|report|période|début|fin|date|libellé|opération|relevé|extrait|page\s*\d/i;
+    var txs=[];
+    lines.forEach(function(line){
+      var cells=line;
+      var full=cells.map(function(c){return c.t;}).join(' ');
+      if(SKIP_RE.test(full)) return;
+      var dm=full.match(DATE_RE);
+      if(!dm) return;
+      // Find numeric cells (amounts)
+      var numCells=cells.filter(function(c){
+        var t=c.t.replace(/\s/g,'');
+        return NUM_RE.test(t)&&t.length>=3;
+      });
+      if(!numCells.length) return;
+      // Discard last numeric cell (often running balance) if 2+ amounts
+      var txNums=numCells.length>1?numCells.slice(0,-1):numCells;
+      // First non-zero
+      var txCell=null,txAmt=NaN;
+      for(var i=0;i<txNums.length;i++){
+        var n=parseFrNum(txNums[i].t);
+        if(!isNaN(n)&&n!==0){txCell=txNums[i];txAmt=n;break;}
+      }
+      if(isNaN(txAmt)) return;
+      // Sign: if 2+ amount columns, left=debit (negative), right=credit (positive)
+      if(txNums.length>=2&&txCell){
+        var xs=txNums.map(function(c){return c.x;});
+        var span=Math.max.apply(null,xs)-Math.min.apply(null,xs);
+        if(span>15){
+          var rel=(txCell.x-Math.min.apply(null,xs))/span;
+          txAmt=rel<0.5?-Math.abs(txAmt):Math.abs(txAmt);
+        }
+      }
+      // Label: cells between date and first amount column
+      var dateX=-1;
+      for(var j=0;j<cells.length;j++) if(cells[j].t.indexOf(dm[1])!==-1){dateX=cells[j].x;break;}
+      var firstAmtX=txCell?txCell.x:999999;
+      var lblCells=cells.filter(function(c){
+        return c.x>(dateX>=0?dateX:0)&&c.x<firstAmtX&&!DATE_RE.test(c.t)&&!NUM_RE.test(c.t.replace(/\s/g,''));
+      });
+      var label=lblCells.map(function(c){return c.t;}).join(' ').trim();
+      if(!label){
+        // Fallback: strip date and amounts from full line
+        label=full.replace(dm[0],'').replace(txCell?txCell.t:'','').replace(/[\d\s][,\.]\d{2}/g,'').replace(/\s+/g,' ').trim();
+      }
+      var date=parseTxDate(dm[1]);
+      if(!date) return;
+      txs.push({date:date,label:label,amount:txAmt});
+    });
+    return txs;
+  }
+
+  function renderPDFPreview(txs,invertRef){
+    var infoEl=document.getElementById('csv-preview-info');
+    var mapEl=document.getElementById('csv-col-map');
+    var cb=document.getElementById('csv-confirm');
+    if(!txs||!txs.length){
+      infoEl.textContent='Aucune transaction détectée dans ce PDF. Le format de votre banque n\'est peut-être pas supporté (essayez l\'export CSV si disponible).';
+      return;
+    }
+    infoEl.textContent=txs.length+' transactions détectées · PDF';
+    var inv=invertRef[0];
+    var sample=txs.slice(0,10);
+    var rows=sample.map(function(tx){
+      var amt=inv?-tx.amount:tx.amount;
+      var neg=amt<0;
+      return '<tr><td style="padding:3px 8px;white-space:nowrap;">'+tx.date+'</td>'+
+        '<td style="padding:3px 8px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+escapeHtml(tx.label)+'">'+escapeHtml(tx.label)+'</td>'+
+        '<td style="padding:3px 8px;text-align:right;color:'+(neg?'#F87171':'var(--accent)')+';">'+amt.toFixed(2)+'€</td></tr>';
+    }).join('');
+    mapEl.innerHTML='<div style="overflow-x:auto;margin-bottom:10px;">'+
+      '<table style="width:100%;border-collapse:collapse;font-size:12px;">'+
+        '<tr style="color:var(--ink-faint);border-bottom:1px solid var(--line-soft);"><th style="text-align:left;padding:3px 8px;">Date</th><th style="text-align:left;padding:3px 8px;">Libellé</th><th style="text-align:right;padding:3px 8px;">Montant</th></tr>'+
+        rows+(txs.length>10?'<tr><td colspan="3" style="padding:3px 8px;color:var(--ink-faint);">… et '+(txs.length-10)+' autres</td></tr>':'')+
+      '</table>'+
+    '</div>'+
+    '<label style="display:flex;align-items:center;gap:8px;font-size:12.5px;cursor:pointer;">'+
+      '<input type="checkbox" id="pdf-invert-signs"'+(inv?' checked':'')+'>'+
+      'Inverser les signes (si les dépenses apparaissent en positif)'+
+    '</label>';
+    var chk=mapEl.querySelector('#pdf-invert-signs');
+    if(chk) chk.addEventListener('change',function(){ invertRef[0]=this.checked; renderPDFPreview(txs,invertRef); });
+    mapEl.style.display='block';
+    if(cb){cb.style.display='inline-block';cb.textContent='Importer';}
+    _csvParsed._pdfTxs=txs;
+    _csvParsed._pdfInvRef=invertRef;
+  }
+
   // ---- CSV Import Modal ----
   function openCSVImport(accountId){
     _csvParsed={rows:null,mapping:null,accountId:accountId};
@@ -4328,7 +4475,22 @@
   document.getElementById('csv-file-input').addEventListener('change', function(e){
     var file=e.target.files[0];
     if(!file) return;
-    readCSVFile(file,'UTF-8');
+    var isPDF=file.name.toLowerCase().endsWith('.pdf')||file.type==='application/pdf';
+    if(isPDF){
+      document.getElementById('csv-preview-info').textContent='Lecture du PDF en cours…';
+      document.getElementById('csv-col-map').style.display='none';
+      document.getElementById('csv-col-map').innerHTML='';
+      document.getElementById('csv-import-stats').style.display='none';
+      var cb2=document.getElementById('csv-confirm');
+      if(cb2){cb2.style.display='none';cb2.textContent='Importer';}
+      _csvParsed={rows:null,mapping:null,accountId:_csvParsed?_csvParsed.accountId:null};
+      parsePDFFile(file,function(txs,err){
+        if(err){document.getElementById('csv-preview-info').textContent=err;return;}
+        renderPDFPreview(txs,[false]);
+      });
+    } else {
+      readCSVFile(file,'UTF-8');
+    }
   });
 
   function renderCSVPreview(rows,mapping,encoding){
@@ -4366,9 +4528,38 @@
   }
 
   document.getElementById('csv-confirm').addEventListener('click', function(){
-    if(!_csvParsed||!_csvParsed.rows) return;
+    if(!_csvParsed) return;
     var cb=this;
     if(cb.textContent==='Fermer'){ closeCSVImport(); return; }
+    // PDF mode
+    if(_csvParsed._pdfTxs){
+      var inv=_csvParsed._pdfInvRef&&_csvParsed._pdfInvRef[0];
+      var hashes2={};
+      (state.finance.transactions||[]).forEach(function(t){ if(t._hash) hashes2[t._hash]=true; });
+      var imp2=0,dup2=0;
+      _csvParsed._pdfTxs.forEach(function(tx){
+        var amount=inv?-tx.amount:tx.amount;
+        var hash=txHash(tx.date,tx.label,amount);
+        if(hashes2[hash]){dup2++;return;}
+        hashes2[hash]=true;
+        if(!state.finance.transactions) state.finance.transactions=[];
+        state.finance.transactions.push({
+          id:'tx'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+          accountId:_csvParsed.accountId,date:tx.date,label:tx.label,rawLabel:tx.label,
+          amount:amount,category:classifyTx(tx.label),_hash:hash
+        });
+        imp2++;
+      });
+      saveData();
+      var st2=document.getElementById('csv-import-stats');
+      st2.innerHTML='<b>'+imp2+'</b> transaction'+(imp2>1?'s':'')+' importée'+(imp2>1?'s':'')+
+        (dup2>0?' · <b>'+dup2+'</b> doublon'+(dup2>1?'s':'')+' ignoré'+(dup2>1?'s':''):'')+'.';
+      st2.style.display='block';
+      cb.textContent='Fermer';
+      renderFinanceComptes();
+      return;
+    }
+    if(!_csvParsed.rows) return;
     var mapping=_csvParsed.mapping, rows=_csvParsed.rows, accountId=_csvParsed.accountId;
     var hashes={};
     (state.finance.transactions||[]).forEach(function(t){ if(t._hash) hashes[t._hash]=true; });
