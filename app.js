@@ -1412,6 +1412,7 @@
           return '<div class="block" data-blockid="'+block.id+'" style="background:'+col+'22;border:1px solid '+col+';height:'+heightPx+'px;left:calc('+leftPct+'% + 4px);right:auto;width:calc('+widthPct+'% - 8px);">'+
             '<div class="block-main"><div class="block-title" style="color:'+col+';">'+(block.isSleepBlock?'<i class="ti ti-moon" style="font-size:11px;margin-right:3px;"></i>':'')+approxTag+escapeHtml(block.title)+exactTimeNote+'</div>'+
             (showSub ? '<div class="block-sub" style="color:'+col+';">'+pillarLabel(block.pillarId)+(block.approximateTime?' · horaire approx.':'')+spanNote+'</div>' : '')+'</div>'+
+            '<button class="block-del-btn" data-blockdel="'+block.id+'" style="background:none;border:none;cursor:pointer;padding:2px 4px;color:'+col+';opacity:0.55;flex-shrink:0;" title="Supprimer">'+svgIcon('trash',12)+'</button>'+
             '<span class="block-drag-handle" data-blockdraghandle="'+block.id+'" style="color:'+col+';" title="Glisser vers un autre créneau">'+svgIcon('grip',12)+'</span></div>';
         }).join('');
         rowSpanStyle = 'min-height:'+((maxDur/30)*30)+'px;';
@@ -1427,16 +1428,47 @@
     var periodOrder = ['matinee','midi','apresmidi','soiree'];
     var slotsHtml = periodOrder.map(function(periodKey){
       var p = periods[periodKey];
+      // Blocs qui ont démarré AVANT cette plage et la traversent (ex : 2h→14h visible dans Matinée + Midi)
+      var contBlocks = dayBlocks.filter(function(b){
+        var bStart = blockStartMinutes(b);
+        var bEnd = bStart + durationMinutes(b);
+        return bStart < p.start && bEnd > p.start;
+      });
+      // Empêche les créneaux couverts par ces blocs d'être rendus en double dans cette plage
+      contBlocks.forEach(function(b){
+        var bEnd = blockStartMinutes(b) + durationMinutes(b);
+        if(bEnd > occupiedUntil) occupiedUntil = bEnd;
+      });
+      // Rendu visuel de la portion du bloc dans cette plage
+      var contHtml = contBlocks.map(function(block){
+        var bEnd = blockStartMinutes(block) + durationMinutes(block);
+        var inPeriod = Math.min(bEnd, p.end) - p.start;
+        var col = pillarColor(block.pillarId);
+        var heightPx = Math.max(26, (inPeriod/30)*30 - 4);
+        var hh = Math.floor(inPeriod/60), mm = inPeriod%60;
+        var durLabel = hh>0 ? hh+'h'+(mm?pad2(mm):'') : mm+'min';
+        var showSub = heightPx >= 34;
+        return '<div class="hour-slot" style="min-height:'+((inPeriod/30)*30)+'px;">'+
+          '<div class="block" data-blockid="'+block.id+'" style="background:'+col+'22;border:1px solid '+col+';border-left:3px solid '+col+';height:'+heightPx+'px;left:4px;right:4px;width:auto;">'+
+            '<div class="block-main">'+
+              '<div class="block-title" style="color:'+col+';">'+escapeHtml(block.title)+'<span style="opacity:0.45;font-size:10px;margin-left:5px;">↳ '+durLabel+'</span></div>'+
+              (showSub ? '<div class="block-sub" style="color:'+col+';">'+pillarLabel(block.pillarId)+'</div>' : '')+
+            '</div>'+
+            '<button class="block-del-btn" data-blockdel="'+block.id+'" style="background:none;border:none;cursor:pointer;padding:2px 4px;color:'+col+';opacity:0.55;flex-shrink:0;" title="Supprimer">'+svgIcon('trash',12)+'</button>'+
+            '<span class="block-drag-handle" data-blockdraghandle="'+block.id+'" style="color:'+col+';" title="Glisser vers un autre créneau">'+svgIcon('grip',12)+'</span>'+
+          '</div>'+
+        '</div>';
+      }).join('');
       var slotsInPeriod = allSlots.filter(function(sm){ return sm>=p.start && sm<p.end; });
       // N'afficher que les créneaux réellement occupés dans cette plage — les créneaux vides entre
       // deux blocs ne sont pas rendus, ce qui garde la hauteur de la journée proportionnelle au contenu.
       var occupiedSlots = slotsInPeriod.filter(function(sm){
         return dayBlocks.some(function(b){ var bm=blockStartMinutes(b); return bm>=sm && bm<sm+30; });
       });
-      var rowsHtml = occupiedSlots.map(renderHourSlot).join('');
+      var rowsHtml = contHtml + occupiedSlots.map(renderHourSlot).join('');
       // Une plage sans aucun créneau occupé reste affichée (l'utilisateur voit toujours la structure de
       // sa journée), mais sans détail d'heures vides en dessous — juste son en-tête.
-      var hasContent = occupiedSlots.length > 0;
+      var hasContent = contBlocks.length > 0 || occupiedSlots.length > 0;
       return '<div class="day-period" data-period="'+periodKey+'">'+
         '<div class="day-period-header" data-periodstart="'+p.start+'"><span class="day-period-label">'+p.label+'</span><span class="day-period-range">'+slotLabel(p.start)+' – '+slotLabel(p.end)+'</span></div>'+
         (hasContent ? '<div class="day-period-body">'+rowsHtml+'</div>' : '')+
@@ -1485,9 +1517,17 @@
         openBlockEditor(parseInt(header.dataset.periodstart), null);
       });
     });
+    grid.querySelectorAll('[data-blockdel]').forEach(function(btn){
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        var block = findItem(state.blocks, {id:btn.dataset.blockdel});
+        deleteWithUndo(function(){ return state.blocks; }, btn.dataset.blockdel, block?block.title:'bloc', [renderAgenda, renderNow]);
+      });
+    });
     grid.querySelectorAll('.block').forEach(function(el){
       el.addEventListener('click', function(e){
         if(e.target.closest('[data-blockdraghandle]')) return;
+        if(e.target.closest('[data-blockdel]')) return;
         e.stopPropagation();
         var block = findItem(state.blocks, {id:el.dataset.blockid});
         openBlockEditor(blockStartMinutes(block), block);
@@ -3798,7 +3838,7 @@
   // Ancre persistée en localStorage pour survivre aux suspensions iOS
   var _geo = { anchorLat: null, anchorLng: null, anchorTime: null, prompted: false };
   var _pendingGeoLat = null, _pendingGeoLng = null;
-  var _geoBackdrop   = document.getElementById('geo-backdrop');
+  var _geoBanner     = document.getElementById('geo-banner');
   var _geoNameInput  = document.getElementById('geo-name-input');
   var _geoPillarSel  = document.getElementById('geo-pillar-select');
   var _geoSaveCheck  = document.getElementById('geo-save-check');
@@ -3867,6 +3907,7 @@
     saveGeoAnchor();
     saveData();
     renderAgenda();
+    switchToView('today');
     sendNotif('📍 ' + name, 'Bloc ajouté · ' + geoPlageLabel() + ' · ' + duration + ' min');
   }
 
@@ -3876,13 +3917,13 @@
     _geoNameInput.value = suggestedName || '';
     _geoPlaceHint.textContent = suggestedName ? 'Lieu détecté : ' + suggestedName : 'Lieu inconnu';
     _geoTimeHint.textContent = 'Depuis ' + (Math.round((Date.now() - _geo.anchorTime) / 60000)) + ' min · ' + geoPlageLabel();
-    _geoBackdrop.style.display = 'flex';
+    _geoBanner.style.display = 'block';
     _geo.prompted = true;
     saveGeoAnchor();
     sendNotif('📍 Nouveau lieu détecté', suggestedName || 'Tu es là depuis ' + Math.round((Date.now()-_geo.anchorTime)/60000) + ' min. Ouvre Boussole pour ajouter.');
   }
 
-  function closeGeoModal() { _geoBackdrop.style.display = 'none'; }
+  function closeGeoModal() { _geoBanner.style.display = 'none'; }
 
   document.getElementById('geo-confirm-btn').addEventListener('click', function() {
     var name = _geoNameInput.value.trim();
@@ -3898,7 +3939,6 @@
     closeGeoModal();
   });
   document.getElementById('geo-cancel-btn').addEventListener('click', closeGeoModal);
-  _geoBackdrop.addEventListener('click', function(e) { if (e.target === _geoBackdrop) closeGeoModal(); });
 
   // ---- Geocodage inverse ----
   function reverseGeocode(lat, lng, cb) {

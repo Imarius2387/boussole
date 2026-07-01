@@ -686,28 +686,29 @@
   </p>
 </div>
 
-  <div class="block-modal-backdrop" id="geo-backdrop" style="display:none;">
-    <div class="block-modal">
-      <p class="section-title" style="margin-bottom:6px;">📍 Où te trouves-tu ?</p>
-      <p class="found-hint" id="geo-place-hint" style="margin-top:0;margin-bottom:4px;"></p>
-      <p class="found-hint" id="geo-time-hint" style="margin-top:0;margin-bottom:14px;font-size:12px;opacity:0.7;"></p>
-      <span class="found-label">Nom du lieu</span>
-      <input type="text" class="found-input" id="geo-name-input" placeholder="Ex : Salle de sport, Bibliothèque…" style="margin-bottom:12px;">
-      <span class="found-label">Pilier</span>
-      <select class="found-input" id="geo-pillar-select" style="margin-bottom:14px;">
-        <option value="professionnel">Professionnel</option>
-        <option value="personnel">Personnel</option>
-        <option value="familial">Familial</option>
-        <option value="social">Social</option>
-      </select>
-      <label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;cursor:pointer;">
-        <input type="checkbox" id="geo-save-check" checked>
-        <span class="found-hint" style="margin:0;">Mémoriser ce lieu pour la prochaine fois</span>
-      </label>
-      <div class="goal-form-row">
-        <button class="btn primary" id="geo-confirm-btn" style="flex:1;justify-content:center;"><i class="ti ti-check"></i> Ajouter à l'agenda</button>
-        <button class="btn ghost sm" id="geo-cancel-btn">Ignorer</button>
+  <div id="geo-banner" style="display:none; position:fixed; top:0; left:0; right:0; z-index:9999; background:var(--bg-raised); border-bottom:2px solid #6EBF8B; padding:14px 16px; box-shadow:0 6px 24px rgba(0,0,0,0.6);">
+    <div style="max-width:480px;margin:0 auto;">
+      <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;">
+        <span style="font-size:18px;line-height:1.3;">📍</span>
+        <div style="flex:1;min-width:0;">
+          <div id="geo-place-hint" style="font-weight:700;color:var(--ink);font-size:14px;"></div>
+          <div id="geo-time-hint" style="font-size:12px;color:var(--ink-dim);margin-top:2px;"></div>
+        </div>
+        <button id="geo-cancel-btn" style="background:none;border:none;cursor:pointer;color:var(--ink-dim);font-size:22px;padding:0;line-height:1;flex-shrink:0;">×</button>
       </div>
+      <input type="text" class="found-input" id="geo-name-input" placeholder="Nom du lieu… (ex : Salle de sport)" style="margin-bottom:8px;width:100%;box-sizing:border-box;">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+        <select class="found-input" id="geo-pillar-select" style="flex:1;margin:0;">
+          <option value="professionnel">Professionnel</option>
+          <option value="personnel">Personnel</option>
+          <option value="familial">Familial</option>
+          <option value="social">Social</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim);white-space:nowrap;cursor:pointer;">
+          <input type="checkbox" id="geo-save-check" checked> Mémoriser
+        </label>
+      </div>
+      <button class="btn primary" id="geo-confirm-btn" style="width:100%;justify-content:center;"><i class="ti ti-check"></i> Ajouter à l'agenda</button>
     </div>
   </div>
 

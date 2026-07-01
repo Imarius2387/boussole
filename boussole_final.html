@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -1220,28 +1220,29 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   </p>
 </div>
 
-  <div class="block-modal-backdrop" id="geo-backdrop" style="display:none;">
-    <div class="block-modal">
-      <p class="section-title" style="margin-bottom:6px;">📍 Où te trouves-tu ?</p>
-      <p class="found-hint" id="geo-place-hint" style="margin-top:0;margin-bottom:4px;"></p>
-      <p class="found-hint" id="geo-time-hint" style="margin-top:0;margin-bottom:14px;font-size:12px;opacity:0.7;"></p>
-      <span class="found-label">Nom du lieu</span>
-      <input type="text" class="found-input" id="geo-name-input" placeholder="Ex : Salle de sport, Bibliothèque…" style="margin-bottom:12px;">
-      <span class="found-label">Pilier</span>
-      <select class="found-input" id="geo-pillar-select" style="margin-bottom:14px;">
-        <option value="professionnel">Professionnel</option>
-        <option value="personnel">Personnel</option>
-        <option value="familial">Familial</option>
-        <option value="social">Social</option>
-      </select>
-      <label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;cursor:pointer;">
-        <input type="checkbox" id="geo-save-check" checked>
-        <span class="found-hint" style="margin:0;">Mémoriser ce lieu pour la prochaine fois</span>
-      </label>
-      <div class="goal-form-row">
-        <button class="btn primary" id="geo-confirm-btn" style="flex:1;justify-content:center;"><i class="ti ti-check"></i> Ajouter à l'agenda</button>
-        <button class="btn ghost sm" id="geo-cancel-btn">Ignorer</button>
+  <div id="geo-banner" style="display:none; position:fixed; top:0; left:0; right:0; z-index:9999; background:var(--bg-raised); border-bottom:2px solid #6EBF8B; padding:14px 16px; box-shadow:0 6px 24px rgba(0,0,0,0.6);">
+    <div style="max-width:480px;margin:0 auto;">
+      <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;">
+        <span style="font-size:18px;line-height:1.3;">📍</span>
+        <div style="flex:1;min-width:0;">
+          <div id="geo-place-hint" style="font-weight:700;color:var(--ink);font-size:14px;"></div>
+          <div id="geo-time-hint" style="font-size:12px;color:var(--ink-dim);margin-top:2px;"></div>
+        </div>
+        <button id="geo-cancel-btn" style="background:none;border:none;cursor:pointer;color:var(--ink-dim);font-size:22px;padding:0;line-height:1;flex-shrink:0;">×</button>
       </div>
+      <input type="text" class="found-input" id="geo-name-input" placeholder="Nom du lieu… (ex : Salle de sport)" style="margin-bottom:8px;width:100%;box-sizing:border-box;">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+        <select class="found-input" id="geo-pillar-select" style="flex:1;margin:0;">
+          <option value="professionnel">Professionnel</option>
+          <option value="personnel">Personnel</option>
+          <option value="familial">Familial</option>
+          <option value="social">Social</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-dim);white-space:nowrap;cursor:pointer;">
+          <input type="checkbox" id="geo-save-check" checked> Mémoriser
+        </label>
+      </div>
+      <button class="btn primary" id="geo-confirm-btn" style="width:100%;justify-content:center;"><i class="ti ti-check"></i> Ajouter à l'agenda</button>
     </div>
   </div>
 
@@ -2670,6 +2671,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
           return '<div class="block" data-blockid="'+block.id+'" style="background:'+col+'22;border:1px solid '+col+';height:'+heightPx+'px;left:calc('+leftPct+'% + 4px);right:auto;width:calc('+widthPct+'% - 8px);">'+
             '<div class="block-main"><div class="block-title" style="color:'+col+';">'+(block.isSleepBlock?'<i class="ti ti-moon" style="font-size:11px;margin-right:3px;"></i>':'')+approxTag+escapeHtml(block.title)+exactTimeNote+'</div>'+
             (showSub ? '<div class="block-sub" style="color:'+col+';">'+pillarLabel(block.pillarId)+(block.approximateTime?' · horaire approx.':'')+spanNote+'</div>' : '')+'</div>'+
+            '<button class="block-del-btn" data-blockdel="'+block.id+'" style="background:none;border:none;cursor:pointer;padding:2px 4px;color:'+col+';opacity:0.55;flex-shrink:0;" title="Supprimer">'+svgIcon('trash',12)+'</button>'+
             '<span class="block-drag-handle" data-blockdraghandle="'+block.id+'" style="color:'+col+';" title="Glisser vers un autre créneau">'+svgIcon('grip',12)+'</span></div>';
         }).join('');
         rowSpanStyle = 'min-height:'+((maxDur/30)*30)+'px;';
@@ -2685,16 +2687,47 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     var periodOrder = ['matinee','midi','apresmidi','soiree'];
     var slotsHtml = periodOrder.map(function(periodKey){
       var p = periods[periodKey];
+      // Blocs qui ont démarré AVANT cette plage et la traversent (ex : 2h→14h visible dans Matinée + Midi)
+      var contBlocks = dayBlocks.filter(function(b){
+        var bStart = blockStartMinutes(b);
+        var bEnd = bStart + durationMinutes(b);
+        return bStart < p.start && bEnd > p.start;
+      });
+      // Empêche les créneaux couverts par ces blocs d'être rendus en double dans cette plage
+      contBlocks.forEach(function(b){
+        var bEnd = blockStartMinutes(b) + durationMinutes(b);
+        if(bEnd > occupiedUntil) occupiedUntil = bEnd;
+      });
+      // Rendu visuel de la portion du bloc dans cette plage
+      var contHtml = contBlocks.map(function(block){
+        var bEnd = blockStartMinutes(block) + durationMinutes(block);
+        var inPeriod = Math.min(bEnd, p.end) - p.start;
+        var col = pillarColor(block.pillarId);
+        var heightPx = Math.max(26, (inPeriod/30)*30 - 4);
+        var hh = Math.floor(inPeriod/60), mm = inPeriod%60;
+        var durLabel = hh>0 ? hh+'h'+(mm?pad2(mm):'') : mm+'min';
+        var showSub = heightPx >= 34;
+        return '<div class="hour-slot" style="min-height:'+((inPeriod/30)*30)+'px;">'+
+          '<div class="block" data-blockid="'+block.id+'" style="background:'+col+'22;border:1px solid '+col+';border-left:3px solid '+col+';height:'+heightPx+'px;left:4px;right:4px;width:auto;">'+
+            '<div class="block-main">'+
+              '<div class="block-title" style="color:'+col+';">'+escapeHtml(block.title)+'<span style="opacity:0.45;font-size:10px;margin-left:5px;">↳ '+durLabel+'</span></div>'+
+              (showSub ? '<div class="block-sub" style="color:'+col+';">'+pillarLabel(block.pillarId)+'</div>' : '')+
+            '</div>'+
+            '<button class="block-del-btn" data-blockdel="'+block.id+'" style="background:none;border:none;cursor:pointer;padding:2px 4px;color:'+col+';opacity:0.55;flex-shrink:0;" title="Supprimer">'+svgIcon('trash',12)+'</button>'+
+            '<span class="block-drag-handle" data-blockdraghandle="'+block.id+'" style="color:'+col+';" title="Glisser vers un autre créneau">'+svgIcon('grip',12)+'</span>'+
+          '</div>'+
+        '</div>';
+      }).join('');
       var slotsInPeriod = allSlots.filter(function(sm){ return sm>=p.start && sm<p.end; });
       // N'afficher que les créneaux réellement occupés dans cette plage — les créneaux vides entre
       // deux blocs ne sont pas rendus, ce qui garde la hauteur de la journée proportionnelle au contenu.
       var occupiedSlots = slotsInPeriod.filter(function(sm){
         return dayBlocks.some(function(b){ var bm=blockStartMinutes(b); return bm>=sm && bm<sm+30; });
       });
-      var rowsHtml = occupiedSlots.map(renderHourSlot).join('');
+      var rowsHtml = contHtml + occupiedSlots.map(renderHourSlot).join('');
       // Une plage sans aucun créneau occupé reste affichée (l'utilisateur voit toujours la structure de
       // sa journée), mais sans détail d'heures vides en dessous — juste son en-tête.
-      var hasContent = occupiedSlots.length > 0;
+      var hasContent = contBlocks.length > 0 || occupiedSlots.length > 0;
       return '<div class="day-period" data-period="'+periodKey+'">'+
         '<div class="day-period-header" data-periodstart="'+p.start+'"><span class="day-period-label">'+p.label+'</span><span class="day-period-range">'+slotLabel(p.start)+' – '+slotLabel(p.end)+'</span></div>'+
         (hasContent ? '<div class="day-period-body">'+rowsHtml+'</div>' : '')+
@@ -2743,9 +2776,17 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
         openBlockEditor(parseInt(header.dataset.periodstart), null);
       });
     });
+    grid.querySelectorAll('[data-blockdel]').forEach(function(btn){
+      btn.addEventListener('click', function(e){
+        e.stopPropagation();
+        var block = findItem(state.blocks, {id:btn.dataset.blockdel});
+        deleteWithUndo(function(){ return state.blocks; }, btn.dataset.blockdel, block?block.title:'bloc', [renderAgenda, renderNow]);
+      });
+    });
     grid.querySelectorAll('.block').forEach(function(el){
       el.addEventListener('click', function(e){
         if(e.target.closest('[data-blockdraghandle]')) return;
+        if(e.target.closest('[data-blockdel]')) return;
         e.stopPropagation();
         var block = findItem(state.blocks, {id:el.dataset.blockid});
         openBlockEditor(blockStartMinutes(block), block);
@@ -5056,7 +5097,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   // Ancre persistée en localStorage pour survivre aux suspensions iOS
   var _geo = { anchorLat: null, anchorLng: null, anchorTime: null, prompted: false };
   var _pendingGeoLat = null, _pendingGeoLng = null;
-  var _geoBackdrop   = document.getElementById('geo-backdrop');
+  var _geoBanner     = document.getElementById('geo-banner');
   var _geoNameInput  = document.getElementById('geo-name-input');
   var _geoPillarSel  = document.getElementById('geo-pillar-select');
   var _geoSaveCheck  = document.getElementById('geo-save-check');
@@ -5125,6 +5166,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     saveGeoAnchor();
     saveData();
     renderAgenda();
+    switchToView('today');
     sendNotif('📍 ' + name, 'Bloc ajouté · ' + geoPlageLabel() + ' · ' + duration + ' min');
   }
 
@@ -5134,13 +5176,13 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     _geoNameInput.value = suggestedName || '';
     _geoPlaceHint.textContent = suggestedName ? 'Lieu détecté : ' + suggestedName : 'Lieu inconnu';
     _geoTimeHint.textContent = 'Depuis ' + (Math.round((Date.now() - _geo.anchorTime) / 60000)) + ' min · ' + geoPlageLabel();
-    _geoBackdrop.style.display = 'flex';
+    _geoBanner.style.display = 'block';
     _geo.prompted = true;
     saveGeoAnchor();
     sendNotif('📍 Nouveau lieu détecté', suggestedName || 'Tu es là depuis ' + Math.round((Date.now()-_geo.anchorTime)/60000) + ' min. Ouvre Boussole pour ajouter.');
   }
 
-  function closeGeoModal() { _geoBackdrop.style.display = 'none'; }
+  function closeGeoModal() { _geoBanner.style.display = 'none'; }
 
   document.getElementById('geo-confirm-btn').addEventListener('click', function() {
     var name = _geoNameInput.value.trim();
@@ -5156,7 +5198,6 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     closeGeoModal();
   });
   document.getElementById('geo-cancel-btn').addEventListener('click', closeGeoModal);
-  _geoBackdrop.addEventListener('click', function(e) { if (e.target === _geoBackdrop) closeGeoModal(); });
 
   // ---- Geocodage inverse ----
   function reverseGeocode(lat, lng, cb) {
@@ -5217,4 +5258,3 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
 </script>
 </body>
 </html>
-
