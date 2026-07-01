@@ -148,7 +148,10 @@
         <div class="day-nav-label" id="day-nav-label"></div>
         <button class="iconbtn sm day-nav-arrow" id="day-next" aria-label="Jour suivant"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6l-6 6"/></svg></button>
       </div>
-      <button class="btn sm" id="day-today-btn" style="margin-left:auto;">Aujourd'hui</button>
+      <div style="display:flex;gap:6px;margin-left:auto;">
+        <button class="btn sm" id="sleep-night-btn" title="Programmer le coucher et le réveil pour ce jour">🌙 Nuit</button>
+        <button class="btn sm" id="day-today-btn">Aujourd'hui</button>
+      </div>
     </div>
     <p class="found-hint" style="margin-top:8px;margin-bottom:14px;">Clique sur une plage horaire pour y poser un bloc. Pour un événement sur plusieurs jours, ajoute une date de fin.</p>
 
@@ -840,6 +843,32 @@
         </label>
       </div>
       <button class="btn primary" id="geo-confirm-btn" style="width:100%;justify-content:center;"><i class="ti ti-check"></i> Ajouter à l'agenda</button>
+    </div>
+  </div>
+
+  <!-- Modal : Coucher / Réveil rapide -->
+  <div id="modal-sleep-night" class="fixed-modal-backdrop" style="display:none;">
+    <div class="modal-card" style="max-width:340px;width:100%;">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;">
+        <div>
+          <div style="font-weight:600;font-size:15px;color:var(--ink);" id="sleep-night-title">Nuit du …</div>
+          <div style="font-size:12px;color:var(--ink-dim);margin-top:2px;" id="sleep-night-sub">→ réveil le lendemain</div>
+        </div>
+        <button id="sleep-night-close" class="btn ghost sm">✕</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div>
+          <label style="font-size:11.5px;color:var(--ink-dim);display:block;margin-bottom:6px;">🌙 Coucher (ce soir)</label>
+          <input type="time" class="found-input" id="sleep-night-bed" value="23:00">
+        </div>
+        <div>
+          <label style="font-size:11.5px;color:var(--ink-dim);display:block;margin-bottom:6px;">☀️ Réveil (lendemain)</label>
+          <input type="time" class="found-input" id="sleep-night-wake" value="07:00">
+        </div>
+      </div>
+      <div id="sleep-night-duration" style="text-align:center;font-size:13px;color:var(--ink-faint);margin-bottom:14px;padding:8px;background:var(--bg-input);border-radius:var(--radius-sm);">Durée : —</div>
+      <button class="btn primary full" id="sleep-night-save" style="justify-content:center;"><i class="ti ti-check"></i> Poser dans l'agenda</button>
+      <button class="btn ghost full" id="sleep-night-remove" style="justify-content:center;margin-top:8px;display:none;">Effacer la nuit</button>
     </div>
   </div>
 

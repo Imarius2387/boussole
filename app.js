@@ -3047,6 +3047,133 @@
     if(cycleDetailWrap) cycleDetailWrap.innerHTML = '';
   }
 
+  // ============ MODAL COUCHER / RÉVEIL RAPIDE ============
+  function openSleepNightModal(){
+    var d=new Date(viewedDate);
+    var nxt=new Date(d); nxt.setDate(nxt.getDate()+1);
+    var DAYS=['dim.','lun.','mar.','mer.','jeu.','ven.','sam.'];
+    var MONTHS=['jan','fév','mar','avr','mai','juin','juil','aoû','sep','oct','nov','déc'];
+    document.getElementById('sleep-night-title').textContent=
+      'Nuit du '+DAYS[d.getDay()]+' '+d.getDate()+' '+MONTHS[d.getMonth()];
+    document.getElementById('sleep-night-sub').textContent=
+      '→ réveil '+DAYS[nxt.getDay()]+' '+nxt.getDate()+' '+MONTHS[nxt.getMonth()];
+    var dayKey=dateKey(d), nxtKey=dateKey(nxt);
+    // Pré-remplir depuis les blocs existants
+    var bedBlock=state.blocks.find(function(b){return b.isSleepBlock&&b.date===dayKey&&(b.title||'').indexOf('(coucher)')!==-1;});
+    var wakeBlock=state.blocks.find(function(b){return b.isSleepBlock&&b.date===nxtKey&&(b.title||'').indexOf('(réveil)')!==-1;});
+    if(bedBlock){
+      var bh=bedBlock.startHour%24,bm=bedBlock.startMinute||0;
+      document.getElementById('sleep-night-bed').value=pad2(bh)+':'+pad2(bm);
+    } else {
+      document.getElementById('sleep-night-bed').value='23:00';
+    }
+    if(wakeBlock){
+      var wh=wakeBlock.startHour%24,wm=wakeBlock.startMinute||0;
+      document.getElementById('sleep-night-wake').value=pad2(wh)+':'+pad2(wm);
+    } else {
+      var defWake=(23*60+(state.sleepTargetMinutes||480))%1440;
+      document.getElementById('sleep-night-wake').value=pad2(Math.floor(defWake/60))+':'+pad2(defWake%60);
+    }
+    var hasSleep=!!(bedBlock||wakeBlock);
+    var rmBtn=document.getElementById('sleep-night-remove');
+    if(rmBtn) rmBtn.style.display=hasSleep?'flex':'none';
+    updateSleepNightDuration();
+    document.getElementById('modal-sleep-night').style.display='flex';
+  }
+  function updateSleepNightDuration(){
+    var bedV=document.getElementById('sleep-night-bed').value;
+    var wakeV=document.getElementById('sleep-night-wake').value;
+    var el=document.getElementById('sleep-night-duration');
+    if(!bedV||!wakeV){el.textContent='Durée : —';return;}
+    var bp=bedV.split(':'),wp=wakeV.split(':');
+    var bedM=parseInt(bp[0])*60+parseInt(bp[1]);
+    var wakeM=parseInt(wp[0])*60+parseInt(wp[1]);
+    var total=wakeM>bedM?wakeM-bedM:(1440-bedM)+wakeM;
+    var h=Math.floor(total/60),m=total%60;
+    var target=state.sleepTargetMinutes||480;
+    var pct=Math.round(total/target*100);
+    var icon=total>=target?'✓':(pct>=80?'~':'⚠️');
+    el.textContent=icon+' '+h+'h'+(m?pad2(m):'')+' de sommeil · '+pct+'% objectif';
+  }
+  function closeSleepNightModal(){
+    document.getElementById('modal-sleep-night').style.display='none';
+  }
+  function placeSleepManual(bedMin, wakeMin){
+    var baseDate=new Date(viewedDate);
+    var baseDateKey=dateKey(baseDate);
+    var totalSleepMin=wakeMin>bedMin?wakeMin-bedMin:(1440-bedMin)+wakeMin;
+    var bedMinNorm=((bedMin%1440)+1440)%1440;
+    var bedPastMidnight=bedMinNorm<SLOTS_BASE_START;
+    var bedMinExt=bedPastMidnight?bedMinNorm+1440:bedMinNorm;
+    var daysAdd=Math.floor((bedMinNorm+totalSleepMin)/1440)+(bedPastMidnight?1:0);
+    var wakeDate=new Date(baseDate); wakeDate.setDate(wakeDate.getDate()+daysAdd);
+    var crossesMidnight=daysAdd>0;
+    var wakeMinOfDay=(bedMinNorm+totalSleepMin)%1440;
+    var sid='sl'+Date.now()+Math.floor(Math.random()*1000);
+    var MARK=30;
+    // Supprime les anciens blocs de sommeil pour ce soir
+    var toRemove=state.blocks.filter(function(b){return b.isSleepBlock&&b.date===baseDateKey;})
+      .map(function(b){return b.sleepSessionId;}).filter(Boolean);
+    state.blocks=state.blocks.filter(function(b){
+      if(!b.isSleepBlock) return true;
+      if(b.date===baseDateKey) return false;
+      if(b.sleepSessionId&&toRemove.indexOf(b.sleepSessionId)!==-1) return false;
+      return true;
+    });
+    state.blocks.push({
+      id:'b'+Date.now()+Math.floor(Math.random()*1000),
+      pillarId:'personnel', title:'Coucher'+(crossesMidnight?' (coucher)':''),
+      date:baseDateKey, endDate:null,
+      startHour:Math.floor(bedMinExt/60), startMinute:bedMinExt%60,
+      durationMinutes:crossesMidnight?MARK:totalSleepMin,
+      goalId:null, isSleepBlock:true, sleepSessionId:sid,
+      sleepWakeDate:dateKey(wakeDate), sleepWakeMinutes:wakeMinOfDay,
+      totalSleepMinutes:crossesMidnight?totalSleepMin:null
+    });
+    if(crossesMidnight){
+      state.blocks.push({
+        id:'b'+(Date.now()+1)+Math.floor(Math.random()*1000),
+        pillarId:'personnel', title:'Coucher (réveil)',
+        date:dateKey(wakeDate), endDate:null,
+        startHour:Math.floor(wakeMinOfDay/60), startMinute:wakeMinOfDay%60,
+        durationMinutes:MARK, goalId:null, isSleepBlock:true, sleepSessionId:sid,
+        sleepWakeDate:dateKey(wakeDate)
+      });
+    }
+    saveData(); renderAgenda(); renderYear();
+  }
+  // Event wiring sleep night modal
+  document.getElementById('sleep-night-btn').addEventListener('click', openSleepNightModal);
+  document.getElementById('sleep-night-close').addEventListener('click', closeSleepNightModal);
+  document.getElementById('modal-sleep-night').addEventListener('click', function(e){if(e.target===this)closeSleepNightModal();});
+  document.getElementById('sleep-night-bed').addEventListener('input', updateSleepNightDuration);
+  document.getElementById('sleep-night-wake').addEventListener('input', updateSleepNightDuration);
+  document.getElementById('sleep-night-save').addEventListener('click', function(){
+    var bedV=document.getElementById('sleep-night-bed').value;
+    var wakeV=document.getElementById('sleep-night-wake').value;
+    if(!bedV||!wakeV) return;
+    var bp=bedV.split(':'),wp=wakeV.split(':');
+    var bedM=parseInt(bp[0])*60+parseInt(bp[1]);
+    var wakeM=parseInt(wp[0])*60+parseInt(wp[1]);
+    placeSleepManual(bedM,wakeM);
+    closeSleepNightModal();
+  });
+  document.getElementById('sleep-night-remove').addEventListener('click', function(){
+    var d=new Date(viewedDate);
+    var nxt=new Date(d); nxt.setDate(nxt.getDate()+1);
+    var dayKey=dateKey(d);
+    var toRemove=state.blocks.filter(function(b){return b.isSleepBlock&&b.date===dayKey;})
+      .map(function(b){return b.sleepSessionId;}).filter(Boolean);
+    state.blocks=state.blocks.filter(function(b){
+      if(!b.isSleepBlock) return true;
+      if(b.date===dayKey) return false;
+      if(b.sleepSessionId&&toRemove.indexOf(b.sleepSessionId)!==-1) return false;
+      return true;
+    });
+    saveData(); renderAgenda();
+    closeSleepNightModal();
+  });
+
   // ============ SUIVI SOMMEIL : taux et qualité, vues semaine / mois / année ============
   var sleepTrackingPeriod = 'week';
 
