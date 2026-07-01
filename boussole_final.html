@@ -1418,8 +1418,6 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     navigator.serviceWorker.register('/boussole/sw.js').catch(function(){});
   }
 </script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
 (function(){
@@ -5416,7 +5414,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
           '<div class="acc-card-top">'+
             '<div style="font-weight:500;font-size:14px;">'+escapeHtml(acc.name)+'</div>'+
             '<div style="display:flex;gap:8px;align-items:center;">'+
-              '<button class="btn sm" data-acc-import="'+acc.id+'" style="font-size:12px;padding:5px 10px;">📂 Importer CSV</button>'+
+              '<button class="btn sm" data-acc-import="'+acc.id+'" style="font-size:12px;padding:5px 10px;">📂 Importer relevé</button>'+
               '<div class="item-del" data-acc-del="'+acc.id+'" style="display:flex;align-items:center;cursor:pointer;">'+svgIcon('trash',14)+'</div>'+
             '</div>'+
           '</div>'+
@@ -5704,23 +5702,28 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     return 'autre';
   }
 
-  // ---- PDF.js init ----
-  (function(){
-    if(typeof pdfjsLib !== 'undefined'){
-      pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    }
-  })();
+  // ---- Lazy script loader ----
+  function loadScript(url, cb){
+    if(document.querySelector('script[src="'+url+'"]')){ cb(null); return; }
+    var s=document.createElement('script');
+    s.src=url; s.onload=function(){cb(null);}; s.onerror=function(){cb(new Error('Échec chargement CDN'));};
+    document.head.appendChild(s);
+  }
 
   // ---- PDF parsing ----
+  var _PDFJS_URL='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  var _PDFJS_WORKER='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   function parsePDFFile(file, onDone){
-    if(typeof pdfjsLib === 'undefined'){
-      onDone(null,'PDF.js non chargé — vérifiez votre connexion internet.');
-      return;
-    }
-    var reader=new FileReader();
-    reader.onload=function(ev){
-      var arr=new Uint8Array(ev.target.result);
-      pdfjsLib.getDocument({data:arr}).promise.then(function(pdf){
+    loadScript(_PDFJS_URL, function(lerr){
+      if(lerr||typeof pdfjsLib==='undefined'){
+        onDone(null,'Connexion internet requise pour lire les PDFs (bibliothèque PDF.js).');
+        return;
+      }
+      try{ pdfjsLib.GlobalWorkerOptions.workerSrc=_PDFJS_WORKER; }catch(e){}
+      var reader=new FileReader();
+      reader.onload=function(ev){
+        var arr=new Uint8Array(ev.target.result);
+        pdfjsLib.getDocument({data:arr}).promise.then(function(pdf){
         var ps=[];
         for(var p=1;p<=pdf.numPages;p++) ps.push(p);
         return Promise.all(ps.map(function(p){
@@ -5734,11 +5737,14 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
       }).then(function(pages){
         onDone(pdfExtractTx(pages), null);
       }).catch(function(e){
-        onDone(null,'Impossible de lire ce PDF : '+e.message);
+        var msg='Impossible de lire ce PDF : '+e.message;
+        if(location.protocol==='file:') msg='PDFs non supportés en local. Ouvrez l\'application depuis GitHub Pages pour les PDFs. Excel (.xlsx) et CSV fonctionnent en local.';
+        onDone(null,msg);
       });
     };
     reader.onerror=function(){ onDone(null,'Erreur de lecture du fichier.'); };
     reader.readAsArrayBuffer(file);
+    }); // end loadScript
   }
 
   function pdfExtractTx(pages){
@@ -5851,28 +5857,30 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     _csvParsed._pdfInvRef=invertRef;
   }
 
-  // ---- Excel parsing (SheetJS) ----
+  // ---- Excel parsing (SheetJS — chargé à la demande) ----
+  var _XLSX_URL='https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
   function parseExcelFile(file, onDone){
-    if(typeof XLSX === 'undefined'){
-      onDone(null,'SheetJS non chargé — vérifiez votre connexion internet.');
-      return;
-    }
-    var reader=new FileReader();
-    reader.onload=function(ev){
-      try{
-        var data=new Uint8Array(ev.target.result);
-        var wb=XLSX.read(data,{type:'array',cellText:true,cellDates:true,dateNF:'dd/mm/yyyy'});
-        var ws=wb.Sheets[wb.SheetNames[0]];
-        var rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,dateNF:'dd/mm/yyyy',defval:''});
-        rows=rows.filter(function(r){ return r.some(function(c){ return (c||'').toString().trim().length>0; }); });
-        if(rows.length<2){ onDone(null,'Aucune donnée trouvée dans ce fichier.'); return; }
-        // Normalize cells to strings
-        rows=rows.map(function(r){ return r.map(function(c){ return (c===null||c===undefined)?'':String(c); }); });
-        onDone(rows,null);
-      }catch(e){ onDone(null,'Impossible de lire ce fichier Excel : '+e.message); }
-    };
-    reader.onerror=function(){ onDone(null,'Erreur de lecture du fichier.'); };
-    reader.readAsArrayBuffer(file);
+    loadScript(_XLSX_URL, function(lerr){
+      if(lerr||typeof XLSX==='undefined'){
+        onDone(null,'Connexion internet requise pour lire les fichiers Excel (bibliothèque SheetJS).');
+        return;
+      }
+      var reader=new FileReader();
+      reader.onload=function(ev){
+        try{
+          var data=new Uint8Array(ev.target.result);
+          var wb=XLSX.read(data,{type:'array',cellText:true,cellDates:true,dateNF:'dd/mm/yyyy'});
+          var ws=wb.Sheets[wb.SheetNames[0]];
+          var rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,dateNF:'dd/mm/yyyy',defval:''});
+          rows=rows.filter(function(r){ return r.some(function(c){ return (c||'').toString().trim().length>0; }); });
+          if(rows.length<2){ onDone(null,'Aucune donnée trouvée dans ce fichier.'); return; }
+          rows=rows.map(function(r){ return r.map(function(c){ return (c===null||c===undefined)?'':String(c); }); });
+          onDone(rows,null);
+        }catch(e){ onDone(null,'Impossible de lire ce fichier Excel : '+e.message); }
+      };
+      reader.onerror=function(){ onDone(null,'Erreur de lecture du fichier.'); };
+      reader.readAsArrayBuffer(file);
+    });
   }
 
   // ---- CSV Import Modal ----
