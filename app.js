@@ -87,8 +87,8 @@
   // entière s'articule autour du rythme réel de la personne plutôt que d'un découpage arbitraire.
   var DAY_PERIODS_DEFAULT = { wake: 7*60, midpoint1: 12*60, midpoint2: 14*60, bedtime: 18*60+999 }; // bedtime par défaut posé à 23h via calcul ci-dessous
   function dayPeriodBounds(){
-    // Bornes fixes, indépendantes du réveil/coucher — simples et prévisibles.
     return {
+      nuit:      {label:'Nuit',       start: 0,     end: 6*60},
       matinee:   {label:'Matinée',    start: 6*60,  end: 12*60},
       midi:      {label:'Midi',       start: 12*60, end: 14*60},
       apresmidi: {label:'Après-midi', start: 14*60, end: 18*60},
@@ -1409,9 +1409,11 @@
             exactTimeNote = ' ('+pad2(block.startHour%24)+'h'+pad2(block.startMinute)+')';
           }
           var approxTag = block.approximateTime ? '<span title="Heure approximative, déduite de la plage horaire dictée" style="opacity:0.7;">≈ </span>' : '';
+          var noteSnippet = block.notes ? '<div class="block-sub" style="color:'+col+';opacity:0.75;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escapeHtml(block.notes)+'</div>' : '';
           return '<div class="block" data-blockid="'+block.id+'" style="background:'+col+'22;border:1px solid '+col+';height:'+heightPx+'px;left:calc('+leftPct+'% + 4px);right:auto;width:calc('+widthPct+'% - 8px);">'+
             '<div class="block-main"><div class="block-title" style="color:'+col+';">'+(block.isSleepBlock?'<i class="ti ti-moon" style="font-size:11px;margin-right:3px;"></i>':'')+approxTag+escapeHtml(block.title)+exactTimeNote+'</div>'+
-            (showSub ? '<div class="block-sub" style="color:'+col+';">'+pillarLabel(block.pillarId)+(block.approximateTime?' · horaire approx.':'')+spanNote+'</div>' : '')+'</div>'+
+            (showSub ? '<div class="block-sub" style="color:'+col+';">'+pillarLabel(block.pillarId)+(block.approximateTime?' · horaire approx.':'')+spanNote+'</div>' : '')+
+            (heightPx >= 50 ? noteSnippet : '')+'</div>'+
             '<button class="block-del-btn" data-blockdel="'+block.id+'" style="background:none;border:none;cursor:pointer;padding:2px 4px;color:'+col+';opacity:0.55;flex-shrink:0;" title="Supprimer">'+svgIcon('trash',12)+'</button>'+
             '<span class="block-drag-handle" data-blockdraghandle="'+block.id+'" style="color:'+col+';" title="Glisser vers un autre créneau">'+svgIcon('grip',12)+'</span></div>';
         }).join('');
@@ -1425,9 +1427,53 @@
     // l'intérieur de chaque plage, sans qu'il faille rien déplier pour les voir.
     var allSlots = slotsForDay(dayBlocks);
     var periods = dayPeriodBounds();
-    var periodOrder = ['matinee','midi','apresmidi','soiree'];
+
+    // ---- Blocs de la veille qui dépassent minuit (startHour >= 24) → visibles dans Nuit ----
+    var prevKey = dateKey(new Date(Date.parse(key) - 86400000));
+    var prevDayBlocks = state.blocks.filter(function(b){ return b.date === prevKey && b.startHour >= 24; });
+    // Projeter en minutes du jour courant (startHour=24→0, startHour=25→60, etc.)
+    var nuitBlocks = prevDayBlocks.map(function(b){
+      return Object.assign({}, b, {
+        _nuitMinute: (b.startHour - 24) * 60 + (b.startMinute || 0),
+        _fromPrevDay: true
+      });
+    }).filter(function(b){ return b._nuitMinute < 6 * 60; });
+
+    // ---- Matinée dynamique : commence au réveil si un bloc sommeil (réveil) est présent ----
+    var wakeBlock = dayBlocks.find(function(b){ return b.isSleepBlock && b.title.indexOf('(coucher)') === -1 && blockStartMinutes(b) >= 6*60 && blockStartMinutes(b) < 12*60; });
+    if (wakeBlock) {
+      var wakeMin = blockStartMinutes(wakeBlock);
+      // S'assurer qu'il n'y a pas d'activité avant le réveil dans la plage matinée
+      var hasEarlyActivity = dayBlocks.some(function(b){ var bm = blockStartMinutes(b); return !b.isSleepBlock && bm >= 6*60 && bm < wakeMin; });
+      if (!hasEarlyActivity) periods.matinee.start = wakeMin;
+    }
+
+    var periodOrder = ['nuit','matinee','midi','apresmidi','soiree'];
     var slotsHtml = periodOrder.map(function(periodKey){
       var p = periods[periodKey];
+
+      // ---- Section Nuit : rendu spécial depuis les blocs de la veille ----
+      if (periodKey === 'nuit') {
+        if (nuitBlocks.length === 0) return ''; // pas de nuit → on masque complètement la section
+        var nuitRowsHtml = nuitBlocks.map(function(block){
+          var col = pillarColor(block.pillarId);
+          var dur = durationMinutes(block);
+          var hPx = Math.max(24, Math.min((dur/30)*30 - 4, 60));
+          var timeLabel = pad2(block.startHour - 24) + 'h' + pad2(block.startMinute || 0);
+          return '<div class="hour-slot" style="min-height:'+(hPx+4)+'px;">'+
+            '<div class="block" data-blockid="'+block.id+'" style="background:'+col+'22;border:1px solid '+col+';border-left:3px solid '+col+';height:'+hPx+'px;left:4px;right:4px;width:auto;">'+
+              '<div class="block-main">'+
+                '<div class="block-title" style="color:'+col+';"><i class="ti ti-moon" style="font-size:11px;margin-right:3px;"></i>'+escapeHtml(block.title)+'<span style="opacity:0.5;font-size:10px;margin-left:5px;">'+timeLabel+'</span></div>'+
+              '</div>'+
+            '</div>'+
+          '</div>';
+        }).join('');
+        return '<div class="day-period" data-period="nuit">'+
+          '<div class="day-period-header" data-periodstart="0"><span class="day-period-label">Nuit</span><span class="day-period-range">0h00 – 6h00</span></div>'+
+          '<div class="day-period-body">'+nuitRowsHtml+'</div>'+
+          '</div>';
+      }
+
       // Blocs qui ont démarré AVANT cette plage et la traversent (ex : 2h→14h visible dans Matinée + Midi)
       var contBlocks = dayBlocks.filter(function(b){
         var bStart = blockStartMinutes(b);
@@ -1520,8 +1566,20 @@
     grid.querySelectorAll('[data-blockdel]').forEach(function(btn){
       btn.addEventListener('click', function(e){
         e.stopPropagation();
-        var block = findItem(state.blocks, {id:btn.dataset.blockdel});
-        deleteWithUndo(function(){ return state.blocks; }, btn.dataset.blockdel, block?block.title:'bloc', [renderAgenda, renderNow]);
+        if (btn.dataset.confirming === '1') {
+          clearTimeout(btn._ct);
+          delete btn.dataset.confirming;
+          var block = findItem(state.blocks, {id:btn.dataset.blockdel});
+          deleteWithUndo(function(){ return state.blocks; }, btn.dataset.blockdel, block?block.title:'bloc', [renderAgenda, renderNow]);
+        } else {
+          btn.dataset.confirming = '1';
+          var origHtml = btn.innerHTML;
+          btn.innerHTML = '<span style="font-size:10px;font-weight:700;color:#F87171;white-space:nowrap;">Confirmer ?</span>';
+          btn.style.opacity = '1';
+          btn._ct = setTimeout(function(){
+            if (btn.parentNode) { btn.dataset.confirming = ''; btn.innerHTML = origHtml; btn.style.opacity = '0.55'; }
+          }, 3000);
+        }
       });
     });
     grid.querySelectorAll('.block').forEach(function(el){
@@ -1762,6 +1820,8 @@
     }
     blockEndDateInput.value = existingBlock && existingBlock.endDate ? existingBlock.endDate : '';
     blockEndDateInput.min = viewedKey();
+    var notesInput = document.getElementById('block-notes-input');
+    if (notesInput) notesInput.value = existingBlock ? (existingBlock.notes || '') : '';
     document.getElementById('block-modal-title').textContent = existingBlock ? 'Modifier le créneau' : 'Nouveau créneau · '+slotLabel(startMin);
     blockDeleteBtn.style.display = existingBlock ? 'flex' : 'none';
     document.getElementById('block-add-another-btn').style.display = existingBlock ? 'flex' : 'none';
@@ -1800,16 +1860,19 @@
       var parts = startTimeInput.value.split(':');
       actualStartMin = parseInt(parts[0])*60 + parseInt(parts[1]);
     }
+    var notesVal = (document.getElementById('block-notes-input') || {}).value || '';
+    notesVal = notesVal.trim();
     if(editingBlock){
       editingBlock.title=title; editingBlock.pillarId=pillarId; editingBlock.durationMinutes=duration;
       editingBlock.startHour=Math.floor(actualStartMin/60); editingBlock.startMinute=actualStartMin%60;
       delete editingBlock.durationHours; editingBlock.endDate=endDate;
+      editingBlock.notes=notesVal;
     } else {
       state.blocks.push({
         id:'b'+Date.now()+Math.floor(Math.random()*1000), pillarId:pillarId, title:title,
         date:viewedKey(), endDate:endDate,
         startHour:Math.floor(actualStartMin/60), startMinute:actualStartMin%60,
-        durationMinutes:duration, goalId:null
+        durationMinutes:duration, goalId:null, notes:notesVal
       });
     }
     saveData(); closeBlockEditor(); renderAgenda(); renderYear();
@@ -3839,6 +3902,11 @@
   var _geo = { anchorLat: null, anchorLng: null, anchorTime: null, prompted: false };
   var _pendingGeoLat = null, _pendingGeoLng = null;
   var _geoBanner     = document.getElementById('geo-banner');
+  // Machine d'état trajet
+  var _prevPos       = null;  // {lat, lng, time} dernière position enregistrée
+  var _inTransit     = false; // en déplacement rapide
+  var _transitStart  = null;  // timestamp de départ
+  var _stableAtDest  = 0;     // nb de checks consécutifs stables à destination
   var _geoNameInput  = document.getElementById('geo-name-input');
   var _geoPillarSel  = document.getElementById('geo-pillar-select');
   var _geoSaveCheck  = document.getElementById('geo-save-check');
@@ -3950,20 +4018,82 @@
     .catch(function() { cb(''); });
   }
 
+  // ---- Trajet automatique ----
+  function createTrajetBlock(startMs, endMs, durationMin) {
+    var startDate = new Date(startMs);
+    state.blocks.push({
+      id: 'b_trajet_' + Date.now(),
+      pillarId: 'personnel',
+      title: '🚗 Trajet',
+      date: dateKey(startDate),
+      endDate: null,
+      startHour: startDate.getHours(),
+      startMinute: startDate.getMinutes(),
+      durationMinutes: durationMin,
+      goalId: null, isSleepBlock: false, isLunchBlock: false,
+      notes: 'Trajet détecté automatiquement'
+    });
+    saveData(); renderAgenda();
+    sendNotif('🚗 Trajet enregistré', durationMin + ' min · ' + geoPlageLabel());
+  }
+
   // ---- Logique principale ----
   function onGeoPosition(pos) {
     var lat = pos.coords.latitude, lng = pos.coords.longitude;
+    var now = Date.now();
+
+    // --- Détection de trajet : >300m en ≤5 min = déplacement motorisé/vélo ---
+    if (_prevPos !== null) {
+      var moveDist = haversineM(lat, lng, _prevPos.lat, _prevPos.lng);
+      var moveMinutes = (now - _prevPos.time) / 60000;
+
+      if (!_inTransit && moveDist > 300 && moveMinutes <= 5) {
+        // Départ rapide détecté → passage en mode transit
+        _inTransit = true;
+        _stableAtDest = 0;
+        _transitStart = _geo.anchorTime || _prevPos.time; // heure de départ = fin du dernier séjour
+      }
+
+      if (_inTransit) {
+        if (moveDist < 120) {
+          _stableAtDest++;
+          if (_stableAtDest >= 3) {
+            // Stable depuis ~3 min à destination → arrivée confirmée
+            var trajetMin = Math.max(2, Math.round((now - _transitStart) / 60000));
+            if (trajetMin <= 240) { createTrajetBlock(_transitStart, now, trajetMin); }
+            _inTransit = false; _stableAtDest = 0;
+            _geo.anchorLat = lat; _geo.anchorLng = lng;
+            _geo.anchorTime = now - 3 * 60000; // ancre posée ~3 min avant (moment d'arrêt réel)
+            _geo.prompted = false;
+            saveGeoAnchor();
+            _prevPos = {lat: lat, lng: lng, time: now};
+            // Vérifier si lieu connu à destination
+            var knownDest = findKnownLocation(lat, lng);
+            if (knownDest) { createGeoBlock(knownDest.name, knownDest.pillarId); }
+            else { reverseGeocode(lat, lng, function(name) { openGeoModal(lat, lng, name); }); }
+            return;
+          }
+        } else {
+          _stableAtDest = 0;
+        }
+        _prevPos = {lat: lat, lng: lng, time: now};
+        return; // ne pas exécuter la logique d'ancre pendant un transit
+      }
+    }
+    _prevPos = {lat: lat, lng: lng, time: now};
+
+    // --- Logique d'ancre classique ---
     if (_geo.anchorLat === null) {
-      _geo.anchorLat = lat; _geo.anchorLng = lng; _geo.anchorTime = Date.now(); _geo.prompted = false;
+      _geo.anchorLat = lat; _geo.anchorLng = lng; _geo.anchorTime = now; _geo.prompted = false;
       saveGeoAnchor(); return;
     }
     if (haversineM(lat, lng, _geo.anchorLat, _geo.anchorLng) > 1000) {
-      // Déplacement significatif → nouvelle ancre
-      _geo.anchorLat = lat; _geo.anchorLng = lng; _geo.anchorTime = Date.now(); _geo.prompted = false;
+      // Déplacement significatif sans transit détecté (ex: premier fix après longue absence)
+      _geo.anchorLat = lat; _geo.anchorLng = lng; _geo.anchorTime = now; _geo.prompted = false;
       saveGeoAnchor(); return;
     }
-    // Même zone — vérifier les 5 minutes
-    if ((Date.now() - _geo.anchorTime) >= 5 * 60 * 1000 && !_geo.prompted) {
+    // Même zone — vérifier les 5 minutes de stabilité
+    if ((now - _geo.anchorTime) >= 5 * 60 * 1000 && !_geo.prompted) {
       var known = findKnownLocation(lat, lng);
       if (known) { createGeoBlock(known.name, known.pillarId); }
       else { reverseGeocode(lat, lng, function(name) { openGeoModal(lat, lng, name); }); }
