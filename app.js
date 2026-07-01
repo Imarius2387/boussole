@@ -3933,8 +3933,67 @@
         _geo.anchorLat = s.anchorLat; _geo.anchorLng = s.anchorLng; _geo.anchorTime = s.anchorTime;
         _geo.prompted = (s.promptedDate === dateKey(new Date()));
         _ongoingGeoBlockId = s.ongoingBlockId || null;
+        // Fallback : si prompted mais ID perdu (bloc créé avant cette version), chercher par heure d'ancre
+        if (_geo.prompted && !_ongoingGeoBlockId && _geo.anchorTime) {
+          _findAndSetOngoingBlock();
+        }
       }
     } catch(e) {}
+  }
+
+  // Heure de réveil du jour courant (depuis un bloc sommeil réveil posé dans l'agenda)
+  function _getWakeTimeMs() {
+    var todayKey = dateKey(new Date());
+    var wakeBlock = state.blocks.find(function(b){
+      return b.date === todayKey && b.isSleepBlock && b.title && b.title.indexOf('(coucher)') === -1;
+    });
+    if (!wakeBlock) return null;
+    var d = new Date(wakeBlock.date);
+    d.setHours(wakeBlock.startHour % 24, wakeBlock.startMinute || 0, 0, 0);
+    return d.getTime();
+  }
+
+  // Cherche le bloc géo le plus récent correspondant à l'ancre courante
+  function _findAndSetOngoingBlock() {
+    if (!_geo.anchorTime) return;
+    var anchorDate = dateKey(new Date(_geo.anchorTime));
+    var todayDate  = dateKey(new Date());
+    var anchorH    = new Date(_geo.anchorTime).getHours();
+    var anchorMin  = new Date(_geo.anchorTime).getMinutes();
+    for (var i = state.blocks.length - 1; i >= 0; i--) {
+      var b = state.blocks[i];
+      if ((b.date === anchorDate || b.date === todayDate) && !b.isSleepBlock && !b.isLunchBlock && b.id.indexOf('trajet') === -1) {
+        var diff = Math.abs(b.startHour * 60 + (b.startMinute || 0) - (anchorH * 60 + anchorMin));
+        if (diff <= 20) { _ongoingGeoBlockId = b.id; saveGeoAnchor(); return; }
+      }
+    }
+  }
+
+  // Étend la durée du bloc géo en cours jusqu'à maintenant (appelé à chaque check GPS et à l'ouverture)
+  function _extendOngoingBlock() {
+    if (!_geo.prompted) return;
+    if (!_ongoingGeoBlockId) { _findAndSetOngoingBlock(); }
+    if (!_ongoingGeoBlockId) return;
+    var ongoing = findItem(state.blocks, {id: _ongoingGeoBlockId});
+    if (!ongoing) { _ongoingGeoBlockId = null; return; }
+    // Heure de début effective : réveil si connu et postérieur à l'ancre
+    var bStartDate = new Date(ongoing.date);
+    bStartDate.setHours(ongoing.startHour % 24, ongoing.startMinute || 0, 0, 0);
+    var wakeMs = _getWakeTimeMs();
+    if (wakeMs && wakeMs > bStartDate.getTime()) {
+      // Ajuster le bloc pour commencer au réveil (intégration sommeil ↔ lieu)
+      var wakeDate = new Date(wakeMs);
+      ongoing.date        = dateKey(wakeDate);
+      ongoing.startHour   = wakeDate.getHours();
+      ongoing.startMinute = wakeDate.getMinutes();
+      bStartDate = wakeDate;
+    }
+    var newDur = Math.round((Date.now() - bStartDate.getTime()) / 60000);
+    if (newDur > ongoing.durationMinutes + 1) {
+      ongoing.durationMinutes = newDur;
+      saveData();
+      if (!document.hidden) renderAgenda();
+    }
   }
 
   function haversineM(lat1, lng1, lat2, lng2) {
@@ -3972,8 +4031,10 @@
   // ---- Création bloc ----
   function createGeoBlock(name, pillarId) {
     var startMs = _geo.anchorTime || (Date.now() - 5 * 60000);
+    // Si réveil connu aujourd'hui et postérieur à l'ancre → démarrer au réveil
+    var wakeMs = _getWakeTimeMs();
+    if (wakeMs && wakeMs > startMs) startMs = wakeMs;
     var startDate = new Date(startMs);
-    // Durée réelle depuis l'ancre, sans plafond artificiel — sera mise à jour en live
     var duration = Math.max(5, Math.round((Date.now() - startMs) / 60000));
     var newId = 'b_geo_' + Date.now();
     _ongoingGeoBlockId = newId;
@@ -4102,6 +4163,7 @@
     if (haversineM(lat, lng, _geo.anchorLat, _geo.anchorLng) > 1000) {
       // Déplacement significatif sans transit détecté (ex: premier fix après longue absence)
       _geo.anchorLat = lat; _geo.anchorLng = lng; _geo.anchorTime = now; _geo.prompted = false;
+      _ongoingGeoBlockId = null;
       saveGeoAnchor(); return;
     }
     // Même zone — vérifier les 5 minutes de stabilité
@@ -4111,20 +4173,8 @@
       else { reverseGeocode(lat, lng, function(name) { openGeoModal(lat, lng, name); }); }
     }
 
-    // Mise à jour live : étendre la durée du bloc géo en cours toutes les 60s
-    if (_geo.prompted && _ongoingGeoBlockId) {
-      var ongoing = findItem(state.blocks, {id: _ongoingGeoBlockId});
-      if (ongoing) {
-        var bStart = new Date(ongoing.date);
-        bStart.setHours(ongoing.startHour % 24, ongoing.startMinute || 0, 0, 0);
-        var newDur = Math.round((now - bStart.getTime()) / 60000);
-        if (newDur > ongoing.durationMinutes + 1) {
-          ongoing.durationMinutes = newDur;
-          saveData();
-          if (!document.hidden) renderAgenda();
-        }
-      }
-    }
+    // Mise à jour live : étendre le bloc géo en cours
+    _extendOngoingBlock();
   }
 
   function geoCheck() {
@@ -4134,7 +4184,8 @@
 
   function startLocationTracking() {
     if (!navigator.geolocation || !state.geoTrackingEnabled) return;
-    loadGeoAnchor(); // restaurer l'ancre depuis localStorage (survie aux suspensions iOS)
+    loadGeoAnchor(); // restaurer l'ancre depuis localStorage
+    _extendOngoingBlock(); // mise à jour immédiate à l'ouverture (sans attendre GPS)
     setTimeout(geoCheck, 5000);   // premier check rapide
     setInterval(geoCheck, 60000); // puis toutes les minutes si app au premier plan
     // Vérification immédiate à chaque retour au premier plan (slide-up → retour app)
