@@ -2688,16 +2688,25 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     var allSlots = slotsForDay(dayBlocks);
     var periods = dayPeriodBounds();
 
-    // ---- Blocs de la veille qui dépassent minuit (startHour >= 24) → visibles dans Nuit ----
+    // ---- Section Nuit : blocs de la veille post-minuit + blocs du jour entre 0h et 6h ----
     var prevKey = dateKey(new Date(Date.parse(key) - 86400000));
     var prevDayBlocks = state.blocks.filter(function(b){ return b.date === prevKey && b.startHour >= 24; });
-    // Projeter en minutes du jour courant (startHour=24→0, startHour=25→60, etc.)
     var nuitBlocks = prevDayBlocks.map(function(b){
       return Object.assign({}, b, {
         _nuitMinute: (b.startHour - 24) * 60 + (b.startMinute || 0),
+        _nuitLabel: pad2(b.startHour - 24) + 'h' + pad2(b.startMinute || 0),
         _fromPrevDay: true
       });
     }).filter(function(b){ return b._nuitMinute < 6 * 60; });
+    // Blocs du jour courant qui commencent avant 6h (géo détecté la nuit, coucher manuel, etc.)
+    var todayEarlyNuit = dayBlocks.filter(function(b){ return blockStartMinutes(b) < 6 * 60; }).map(function(b){
+      return Object.assign({}, b, {
+        _nuitMinute: blockStartMinutes(b),
+        _nuitLabel: pad2(b.startHour) + 'h' + pad2(b.startMinute || 0),
+        _fromPrevDay: false
+      });
+    });
+    nuitBlocks = nuitBlocks.concat(todayEarlyNuit).sort(function(a,b){ return a._nuitMinute - b._nuitMinute; });
 
     // ---- Matinée dynamique : commence au réveil si un bloc sommeil (réveil) est présent ----
     var wakeBlock = dayBlocks.find(function(b){ return b.isSleepBlock && b.title.indexOf('(coucher)') === -1 && blockStartMinutes(b) >= 6*60 && blockStartMinutes(b) < 12*60; });
@@ -2717,14 +2726,13 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
         if (nuitBlocks.length === 0) return ''; // pas de nuit → on masque complètement la section
         var nuitRowsHtml = nuitBlocks.map(function(block){
           var col = pillarColor(block.pillarId);
-          var dur = durationMinutes(block);
-          var hPx = Math.max(24, Math.min((dur/30)*30 - 4, 60));
-          var timeLabel = pad2(block.startHour - 24) + 'h' + pad2(block.startMinute || 0);
-          return '<div class="hour-slot" style="min-height:'+(hPx+4)+'px;">'+
+          var hPx = 28;
+          return '<div class="hour-slot" style="min-height:32px;">'+
             '<div class="block" data-blockid="'+block.id+'" style="background:'+col+'22;border:1px solid '+col+';border-left:3px solid '+col+';height:'+hPx+'px;left:4px;right:4px;width:auto;">'+
               '<div class="block-main">'+
-                '<div class="block-title" style="color:'+col+';"><i class="ti ti-moon" style="font-size:11px;margin-right:3px;"></i>'+escapeHtml(block.title)+'<span style="opacity:0.5;font-size:10px;margin-left:5px;">'+timeLabel+'</span></div>'+
+                '<div class="block-title" style="color:'+col+';"><i class="ti ti-moon" style="font-size:11px;margin-right:3px;opacity:0.7;"></i>'+escapeHtml(block.title)+'<span style="opacity:0.45;font-size:10px;margin-left:5px;">'+block._nuitLabel+'</span></div>'+
               '</div>'+
+              '<button class="block-del-btn" data-blockdel="'+block.id+'" style="background:none;border:none;cursor:pointer;padding:2px 4px;color:'+col+';opacity:0.55;flex-shrink:0;" title="Supprimer">'+svgIcon('trash',11)+'</button>'+
             '</div>'+
           '</div>';
         }).join('');
@@ -5172,18 +5180,19 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   var _geoSaveCheck  = document.getElementById('geo-save-check');
   var _geoPlaceHint  = document.getElementById('geo-place-hint');
   var _geoTimeHint   = document.getElementById('geo-time-hint');
-  var _geoOpts       = { enableHighAccuracy: false, timeout: 10000, maximumAge: 30000 };
+  var _geoOpts          = { enableHighAccuracy: false, timeout: 10000, maximumAge: 30000 };
+  var _ongoingGeoBlockId = null; // ID du bloc géo actuellement "en cours" — étendu à chaque check GPS
 
   function saveGeoAnchor() {
-    try { localStorage.setItem(GEO_ANCHOR_KEY, JSON.stringify({ anchorLat: _geo.anchorLat, anchorLng: _geo.anchorLng, anchorTime: _geo.anchorTime, promptedDate: _geo.prompted ? dateKey(new Date()) : '' })); } catch(e) {}
+    try { localStorage.setItem(GEO_ANCHOR_KEY, JSON.stringify({ anchorLat: _geo.anchorLat, anchorLng: _geo.anchorLng, anchorTime: _geo.anchorTime, promptedDate: _geo.prompted ? dateKey(new Date()) : '', ongoingBlockId: _ongoingGeoBlockId })); } catch(e) {}
   }
   function loadGeoAnchor() {
     try {
       var s = JSON.parse(localStorage.getItem(GEO_ANCHOR_KEY));
       if (s && s.anchorLat) {
         _geo.anchorLat = s.anchorLat; _geo.anchorLng = s.anchorLng; _geo.anchorTime = s.anchorTime;
-        // prompted seulement si c'est le même jour — le lendemain on re-détecte
         _geo.prompted = (s.promptedDate === dateKey(new Date()));
+        _ongoingGeoBlockId = s.ongoingBlockId || null;
       }
     } catch(e) {}
   }
@@ -5224,12 +5233,15 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   function createGeoBlock(name, pillarId) {
     var startMs = _geo.anchorTime || (Date.now() - 5 * 60000);
     var startDate = new Date(startMs);
-    var duration = Math.max(30, Math.min(Math.round((Date.now() - startMs) / 60000), 480));
+    // Durée réelle depuis l'ancre, sans plafond artificiel — sera mise à jour en live
+    var duration = Math.max(5, Math.round((Date.now() - startMs) / 60000));
+    var newId = 'b_geo_' + Date.now();
+    _ongoingGeoBlockId = newId;
     state.blocks.push({
-      id: 'b_geo_' + Date.now(), pillarId: pillarId, title: name,
+      id: newId, pillarId: pillarId, title: name,
       date: dateKey(startDate), endDate: null,
       startHour: startDate.getHours(), startMinute: startDate.getMinutes(),
-      durationMinutes: duration, goalId: null, isSleepBlock: false, isLunchBlock: false
+      durationMinutes: duration, goalId: null, isSleepBlock: false, isLunchBlock: false, notes: ''
     });
     _geo.prompted = true;
     saveGeoAnchor();
@@ -5357,6 +5369,21 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
       var known = findKnownLocation(lat, lng);
       if (known) { createGeoBlock(known.name, known.pillarId); }
       else { reverseGeocode(lat, lng, function(name) { openGeoModal(lat, lng, name); }); }
+    }
+
+    // Mise à jour live : étendre la durée du bloc géo en cours toutes les 60s
+    if (_geo.prompted && _ongoingGeoBlockId) {
+      var ongoing = findItem(state.blocks, {id: _ongoingGeoBlockId});
+      if (ongoing) {
+        var bStart = new Date(ongoing.date);
+        bStart.setHours(ongoing.startHour % 24, ongoing.startMinute || 0, 0, 0);
+        var newDur = Math.round((now - bStart.getTime()) / 60000);
+        if (newDur > ongoing.durationMinutes + 1) {
+          ongoing.durationMinutes = newDur;
+          saveData();
+          if (!document.hidden) renderAgenda();
+        }
+      }
     }
   }
 
