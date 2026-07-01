@@ -1639,8 +1639,11 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   var SUPABASE_URL = 'https://cbrcvrvwndxudgzeiqih.supabase.co';
   var SUPABASE_KEY = 'sb_publishable_1I9f0iPUhVy4tPAIh3dPIg_ivkCfA9x';
 
+  var SYNC_TS_KEY = 'boussole_sync_ts';
+
   function pushToSupabase(snapshot) {
     if (!window.fetch) return;
+    var ts = new Date().toISOString();
     fetch(SUPABASE_URL + '/rest/v1/boussole_data', {
       method: 'POST',
       headers: {
@@ -1649,34 +1652,39 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
         'Authorization': 'Bearer ' + SUPABASE_KEY,
         'Prefer': 'resolution=merge-duplicates'
       },
-      body: JSON.stringify({ id: 'main', data: snapshot, updated_at: new Date().toISOString() })
-    }).catch(function(){});
+      body: JSON.stringify({ id: 'main', data: snapshot, updated_at: ts })
+    })
+    .then(function() { localStorage.setItem(SYNC_TS_KEY, new Date(ts).getTime().toString()); })
+    .catch(function(){});
   }
 
-  function syncFromSupabase() {
+  function applyRemoteData(remote, remoteTs) {
+    var lastSyncTs = parseInt(localStorage.getItem(SYNC_TS_KEY) || '0');
+    if (remoteTs <= lastSyncTs) return; // pas plus récent, rien à faire
+    if (!remote.tasks && !remote.goals && !remote.blocks && !remote.recurring) return; // state vide
+    localStorage.setItem(STORE_KEY, JSON.stringify(remote));
+    localStorage.setItem(SYNC_TS_KEY, remoteTs.toString());
+    window.location.reload();
+  }
+
+  function fetchAndApplySupabase() {
     if (!window.fetch) return;
-    if (sessionStorage.getItem('supa_synced')) return;
-    sessionStorage.setItem('supa_synced', '1');
-    fetch(SUPABASE_URL + '/rest/v1/boussole_data?id=eq.main&select=data', {
-      headers: {
-        'apikey': SUPABASE_KEY,
-        'Authorization': 'Bearer ' + SUPABASE_KEY
-      }
+    fetch(SUPABASE_URL + '/rest/v1/boussole_data?id=eq.main&select=data,updated_at', {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
     })
     .then(function(r){ return r.json(); })
     .then(function(rows){
       if (!rows || !rows.length || !rows[0].data) return;
-      var remote = rows[0].data;
-      // Ignorer un state vide (table initialisée sans données réelles)
-      if (!remote.tasks && !remote.goals && !remote.blocks && !remote.recurring) return;
-      var remoteStr = JSON.stringify(remote);
-      var localStr = localStorage.getItem(STORE_KEY) || '{}';
-      if (remoteStr !== localStr) {
-        localStorage.setItem(STORE_KEY, remoteStr);
-        window.location.reload();
-      }
+      var remoteTs = rows[0].updated_at ? new Date(rows[0].updated_at).getTime() : 0;
+      applyRemoteData(rows[0].data, remoteTs);
     })
     .catch(function(){});
+  }
+
+  function syncFromSupabase() {
+    fetchAndApplySupabase();
+    // Re-vérifie toutes les 2 minutes si des changements viennent d'un autre appareil
+    setInterval(fetchAndApplySupabase, 2 * 60 * 1000);
   }
 
   function saveData(){
@@ -5057,12 +5065,16 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   var _geoOpts       = { enableHighAccuracy: false, timeout: 10000, maximumAge: 30000 };
 
   function saveGeoAnchor() {
-    try { localStorage.setItem(GEO_ANCHOR_KEY, JSON.stringify(_geo)); } catch(e) {}
+    try { localStorage.setItem(GEO_ANCHOR_KEY, JSON.stringify({ anchorLat: _geo.anchorLat, anchorLng: _geo.anchorLng, anchorTime: _geo.anchorTime, promptedDate: _geo.prompted ? dateKey(new Date()) : '' })); } catch(e) {}
   }
   function loadGeoAnchor() {
     try {
       var s = JSON.parse(localStorage.getItem(GEO_ANCHOR_KEY));
-      if (s && s.anchorLat) { _geo.anchorLat = s.anchorLat; _geo.anchorLng = s.anchorLng; _geo.anchorTime = s.anchorTime; _geo.prompted = s.prompted || false; }
+      if (s && s.anchorLat) {
+        _geo.anchorLat = s.anchorLat; _geo.anchorLng = s.anchorLng; _geo.anchorTime = s.anchorTime;
+        // prompted seulement si c'est le même jour — le lendemain on re-détecte
+        _geo.prompted = (s.promptedDate === dateKey(new Date()));
+      }
     } catch(e) {}
   }
 
