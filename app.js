@@ -4218,7 +4218,7 @@
         var val=(rows[r][c]||'').trim();
         if(isDateLike(val)) dN++;
         if(!isNaN(parseFrNum(val))&&val.length>0) nN++;
-        if(val.length>5&&isNaN(parseFrNum(val.replace(',','.')))) tN++;
+        if(val.length>5&&isNaN(parseFrNum(val))) tN++;
         if(val.length>mxL) mxL=val.length;
       }
       stats.push({col:c,dN:dN,nN:nN,tN:tN,mxL:mxL});
