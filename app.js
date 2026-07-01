@@ -430,7 +430,10 @@
   }
 
   function saveData(){
-    try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){}
+    try{
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+      localStorage.setItem('boussole_last_active', Date.now().toString());
+    }catch(e){}
     pushToSupabase(JSON.parse(JSON.stringify(state)));
   }
 
@@ -508,7 +511,9 @@
       palette: '<path d="M12 3a9 9 0 1 0 0 18c1 0 1.5 -.5 1.5 -1.5s-.5 -1.2 -.5 -2c0 -1 1 -1.5 2 -1.5h2a4 4 0 0 0 4 -4c0 -5 -4 -9 -9 -9z"/><circle cx="7.5" cy="10.5" r="1.1" fill="currentColor" stroke="none"/><circle cx="9.5" cy="7" r="1.1" fill="currentColor" stroke="none"/><circle cx="14" cy="7" r="1.1" fill="currentColor" stroke="none"/><circle cx="16.5" cy="10.5" r="1.1" fill="currentColor" stroke="none"/>',
       search: '<circle cx="10" cy="10" r="7"/><path d="M21 21l-6 -6"/>',
       help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7 .3 -1 .9 -1 1.7v.5"/><path d="M12 17.5v.01" stroke-width="2.6"/>',
-      mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6l9 -6"/>'
+      mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6l9 -6"/>',
+      check: '<polyline points="20 6 9 17 4 12"/>',
+      'arrow-right': '<path d="M5 12h14"/><path d="M15 16l4 -4"/><path d="M15 8l4 4"/>'
     };
     return '<svg class="svg-icon" viewBox="0 0 24 24" width="'+size+'" height="'+size+'" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+paths[name]+'</svg>';
   }
@@ -524,7 +529,7 @@
   document.getElementById('search-shortcut-btn').innerHTML = svgIcon('search', 17);
 
   // ============ TABS (deux niveaux : barre principale + menu "Plus") ============
-  var SECONDARY_VIEWS = ['year','goals','projects','finance','foundations','medical','help','sleep-tracking','tasks'];
+  var SECONDARY_VIEWS = ['year','goals','projects','finance','foundations','medical','help','sleep-tracking','tasks','week'];
   var tabs = document.querySelectorAll('.tab');
   var moreItems = document.querySelectorAll('.more-item');
   var views = document.querySelectorAll('.view');
@@ -780,10 +785,11 @@
     var bgLayer = document.getElementById('custom-background-layer');
     var quoteLayer = document.getElementById('custom-quote-layer');
     if(c.backgroundImage){
-      bgLayer.style.backgroundImage = "url('"+c.backgroundImage+"')";
+      // <img> est plus fiable que CSS background-image sur iOS PWA (évite les bugs de rendu avec les data URLs)
+      bgLayer.innerHTML = '<img src="'+c.backgroundImage+'" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;" alt="" loading="eager">';
       bgLayer.classList.add('active');
     } else {
-      bgLayer.style.backgroundImage = '';
+      bgLayer.innerHTML = '';
       bgLayer.classList.remove('active');
     }
     quoteLayer.textContent = c.quote ? '« '+c.quote+' »' : '';
@@ -918,17 +924,23 @@
     return 0;
   }
   function computeScore(t){ return 0; } // ancien système de score, conservé pour éviter des erreurs de référence mais plus utilisé
-  function activeTasks(){ return state.tasks.filter(function(t){ return t.status!=='done'; }); }
-  function sortedTasks(){
-    return state.tasks.filter(function(t){ return t.status!=='done'; })
-      .sort(function(a,b){
-        var ua = (URGENCY_LABELS[a.urgency]||URGENCY_LABELS['week']).order;
-        var ub = (URGENCY_LABELS[b.urgency]||URGENCY_LABELS['week']).order;
-        if(ua!==ub) return ua-ub;
-        return (a.createdAt||'').localeCompare(b.createdAt||'');
-      });
+  function activeTasks(){
+    var todayK = dateKey(new Date());
+    return state.tasks.filter(function(t){ return t.status!=='done' && t.snoozedDate!==todayK; });
   }
-  function sortedTasks(){ return orderByDesc(activeTasks(), computeScore); }
+  function sortedTasks(){
+    var todayK = dateKey(new Date());
+    return activeTasks().sort(function(a,b){
+      // Tasks explicitly skipped today sink to the bottom
+      var aSkip = (a._skippedAt && dateKey(new Date(a._skippedAt))===todayK) ? 1 : 0;
+      var bSkip = (b._skippedAt && dateKey(new Date(b._skippedAt))===todayK) ? 1 : 0;
+      if(aSkip!==bSkip) return aSkip-bSkip;
+      var ua = (URGENCY_LABELS[a.urgency]||URGENCY_LABELS['week']).order;
+      var ub = (URGENCY_LABELS[b.urgency]||URGENCY_LABELS['week']).order;
+      if(ua!==ub) return ua-ub;
+      return (a.createdAt||'').localeCompare(b.createdAt||'');
+    });
+  }
 
   function pillarOptionsHtml(selected){
     return activePillars().map(function(p){
@@ -1228,28 +1240,29 @@
     html+='<div class="now-task">'+escapeHtml(top.text)+'</div>';
     if(metaHtml) html+='<div class="now-meta">'+metaHtml+'</div>';
     html+='<div class="now-actions">';
-    html+='<button class="btn primary" id="now-done"><i class="ti ti-check"></i> Fait</button>';
-    html+='<button class="btn" id="now-skip"><i class="ti ti-arrow-right"></i> Ensuite</button>';
-    html+='<button class="btn ghost" id="now-snooze"><i class="ti ti-clock-pause"></i> Pas aujourd\'hui</button>';
+    html+='<button class="btn primary" data-nowaction="done">'+svgIcon('check',13)+' Fait</button>';
+    html+='<button class="btn" data-nowaction="skip">'+svgIcon('arrow-right',13)+' Ensuite</button>';
+    html+='<button class="btn ghost" data-nowaction="snooze" style="font-size:12px;">Pas aujourd\'hui</button>';
     html+='</div>';
     card.innerHTML=html;
 
-    document.getElementById('now-done').addEventListener('click', function(){
-      top.status='done'; top.doneAt=new Date().toISOString();
-      saveData(); renderNow(); renderTasks(); renderHub();
-    });
-    document.getElementById('now-skip').addEventListener('click', function(){
-      // Pousser la tâche en bas de la liste en la déplaçant artificiellement : on décale son urgence d'un cran si possible
-      var urgencyLevels = ['hour','day','2days','week','month'];
-      var idx = urgencyLevels.indexOf(top.urgency||'week');
-      if(idx < urgencyLevels.length-1) top.urgency = urgencyLevels[idx+1];
-      saveData(); renderNow();
-    });
-    document.getElementById('now-snooze').addEventListener('click', function(){
-      // Remettre la tâche au mois (elle ne doit pas bloquer aujourd'hui)
-      top.urgency = 'month';
-      saveData(); renderNow();
-    });
+    // Event delegation sur card — plus fiable sur iOS que getElementById + addEventListener
+    card.onclick = null; // réinitialise le handler précédent
+    card.onclick = function(e){
+      var btn = e.target.closest('[data-nowaction]');
+      if(!btn) return;
+      var action = btn.dataset.nowaction;
+      if(action==='done'){
+        top.status='done'; top.doneAt=new Date().toISOString();
+        saveData(); renderNow(); renderTasks(); renderHub();
+      } else if(action==='skip'){
+        top._skippedAt = Date.now();
+        saveData(); renderNow();
+      } else if(action==='snooze'){
+        top.snoozedDate = dateKey(new Date());
+        saveData(); renderNow();
+      }
+    };
 
     var rest=sorted.slice(1,4);
     var upHtml='';
@@ -1368,6 +1381,9 @@
     var grid = document.getElementById('agenda-grid');
     var key = viewedKey();
     var dayBlocks = blocksOnDate(key);
+    var _renderNow = new Date();
+    var _isToday = (key === dateKey(_renderNow));
+    var _nowMin = _renderNow.getHours()*60 + _renderNow.getMinutes();
 
     var recurringHtml = ''; // routines retirées de la vue Aujourd'hui — gèrent dans le menu Plus si besoin
 
@@ -1410,8 +1426,12 @@
           }
           var approxTag = block.approximateTime ? '<span title="Heure approximative, déduite de la plage horaire dictée" style="opacity:0.7;">≈ </span>' : '';
           var noteSnippet = block.notes ? '<div class="block-sub" style="color:'+col+';opacity:0.75;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+escapeHtml(block.notes)+'</div>' : '';
+          var bEnd = blockStartMinutes(block) + durationMinutes(block);
+          var isPast = _isToday && bEnd < _nowMin && !block.isSleepBlock && !block.isLunchBlock;
+          var pastOverlay = isPast ? '<div style="position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;background:rgba(0,0,0,0.3);"></div><div style="position:absolute;top:50%;left:8px;right:8px;height:1px;background:'+col+';opacity:0.6;pointer-events:none;"></div>' : '';
           return '<div class="block" data-blockid="'+block.id+'" style="background:'+col+'22;border:1px solid '+col+';height:'+heightPx+'px;left:calc('+leftPct+'% + 4px);right:auto;width:calc('+widthPct+'% - 8px);">'+
-            '<div class="block-main"><div class="block-title" style="color:'+col+';">'+(block.isSleepBlock?'<i class="ti ti-moon" style="font-size:11px;margin-right:3px;"></i>':'')+approxTag+escapeHtml(block.title)+exactTimeNote+'</div>'+
+            pastOverlay+
+            '<div class="block-main"><div class="block-title" style="color:'+col+';'+(isPast?'opacity:0.55;':'')+';">'+(block.isSleepBlock?'<i class="ti ti-moon" style="font-size:11px;margin-right:3px;"></i>':'')+approxTag+escapeHtml(block.title)+exactTimeNote+'</div>'+
             (showSub ? '<div class="block-sub" style="color:'+col+';">'+pillarLabel(block.pillarId)+(block.approximateTime?' · horaire approx.':'')+spanNote+'</div>' : '')+
             (heightPx >= 50 ? noteSnippet : '')+'</div>'+
             '<button class="block-del-btn" data-blockdel="'+block.id+'" style="background:none;border:none;cursor:pointer;padding:2px 4px;color:'+col+';opacity:0.55;flex-shrink:0;" title="Supprimer">'+svgIcon('trash',12)+'</button>'+
@@ -2111,9 +2131,11 @@
 
 
   var MONTH_NAMES = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+  var MONTH_NAMES_SHORT = ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'];
   var yearAssignMode = false;
   var yearAssignProfileId = null;
   var yearBrushActive = false;
+  var viewedYear = new Date().getFullYear();
 
   function renderYearAssignPanel(){
     ensureProfiles();
@@ -2143,58 +2165,63 @@
     var grid = document.getElementById('year-grid');
     if(!grid) return;
 
-    // Construire la grille par semaines (52 semaines, groupées par mois)
-    var year = new Date().getFullYear();
-    var jan1 = new Date(year, 0, 1);
-    // Première semaine : lundi avant ou égal au 1er janvier
-    var firstMonday = mondayOf(jan1);
+    // Mettre à jour le sélecteur d'année
+    var yearDisplay = document.getElementById('year-display');
+    if(yearDisplay) yearDisplay.textContent = viewedYear;
 
+    var todayMondayKey = dateKey(mondayOf(new Date()));
+
+    // Construire 12 boîtes de mois (3 colonnes × 4 lignes)
     var html = '';
-    var currentMonth = -1;
-    var d = new Date(firstMonday);
+    for(var m = 0; m < 12; m++){
+      var firstOfMonth = new Date(viewedYear, m, 1);
+      var firstMonday = mondayOf(firstOfMonth);
+      var d = new Date(firstMonday);
 
-    for(var w = 0; w < 54; w++){
-      var weekKey = dateKey(d);
-      // Stopper si on dépasse l'année
-      if(d.getFullYear() > year && d.getMonth() > 0) break;
+      var weeksHtml = '';
+      for(var w = 0; w < 6; w++){
+        // Arrêter si la semaine est entièrement dans le mois suivant
+        var weekLastDay = new Date(d); weekLastDay.setDate(d.getDate() + 6);
+        if(d.getMonth() > m && d.getFullYear() >= viewedYear) break;
+        if(d.getFullYear() > viewedYear) break;
 
-      var month = d.getMonth();
-      // Afficher le nom du mois si on change de mois
-      if(month !== currentMonth && d.getFullYear() === year){
-        currentMonth = month;
-        html += '<div class="year-month-label">'+MONTH_NAMES[month]+'</div>';
-      }
+        var weekKey = dateKey(d);
+        var assignedPid = (state.weekTypeAssignments||{})[weekKey];
+        var assignedColor = assignedPid ? (PROFILE_COLORS[assignedPid]||'#888') : null;
+        var isCurrentWeek = weekKey === todayMondayKey;
 
-      var assignedPid = (state.weekTypeAssignments||{})[weekKey];
-      var assignedColor = assignedPid ? (PROFILE_COLORS[assignedPid]||'#888') : null;
-      var isCurrentWeek = weekKey === dateKey(mondayOf(new Date()));
-
-      // La semaine = une ligne de 7 petits carrés colorés
-      var dayCells = '';
-      for(var dd=0; dd<7; dd++){
-        var dayD = new Date(d); dayD.setDate(d.getDate()+dd);
-        var dayKey = dateKey(dayD);
-        var inYear = dayD.getFullYear() === year;
-        var bg = '';
-        if(inYear){
-          if(assignedColor){
-            bg = assignedColor + '99'; // couleur du profil, légèrement transparente
-          } else {
-            var dom = dominantPillarForDay(dayKey);
-            bg = dom ? pillarColor(dom)+'66' : 'var(--card-border)';
+        var dayCells = '';
+        for(var dd = 0; dd < 7; dd++){
+          var dayD = new Date(d); dayD.setDate(d.getDate() + dd);
+          var dayKey2 = dateKey(dayD);
+          var inMonth = dayD.getMonth() === m && dayD.getFullYear() === viewedYear;
+          var isToday = dayKey2 === dateKey(new Date());
+          var bg = 'transparent';
+          if(inMonth){
+            if(assignedColor){
+              bg = assignedColor + '99';
+            } else {
+              var dom = dominantPillarForDay(dayKey2);
+              bg = dom ? pillarColor(dom)+'66' : 'var(--card-border)';
+            }
           }
+          dayCells += '<div style="width:11px;height:11px;border-radius:2px;flex-shrink:0;background:'+bg+';'+(isToday&&inMonth?'outline:1.5px solid var(--ink);outline-offset:1px;':'')+';"></div>';
         }
-        dayCells += '<div style="width:13px;height:13px;border-radius:2px;flex-shrink:0;background:'+(inYear?bg:'transparent')+';"></div>';
+
+        var prof = assignedPid ? (state.weekProfiles.find(function(p){return p.id===assignedPid;})||{icon:''}) : null;
+        weeksHtml += '<div class="year-week-row'+(isCurrentWeek?' current-week':'')+'" data-weekmon="'+weekKey+'" '+
+          'style="display:flex;align-items:center;gap:1px;padding:1px 2px;border-radius:3px;cursor:pointer;margin-bottom:1px;'+(assignedColor?'outline:1px solid '+assignedColor+';outline-offset:1px;':'')+'" '+
+          'title="Sem. du '+weekKey+'">'+ dayCells+
+          (prof ? '<span style="font-size:8px;margin-left:3px;color:'+assignedColor+';">'+prof.icon+'</span>' : '')+
+        '</div>';
+
+        d.setDate(d.getDate() + 7);
       }
 
-      html += '<div class="year-week-row'+(isCurrentWeek?' current-week':'')+'" data-weekmon="'+weekKey+'" '+
-        'style="display:flex;align-items:center;gap:2px;padding:2px 4px;border-radius:4px;cursor:pointer;margin-bottom:2px;'+(assignedColor?'outline:1.5px solid '+assignedColor+';outline-offset:1px;':'')+'" '+
-        'title="Semaine du '+weekKey+(assignedPid?' · '+(state.weekProfiles.find(function(p){return p.id===assignedPid;})||{name:''}).name:'')+'">'+
-        dayCells+
-        (assignedPid ? '<span style="font-size:10px;margin-left:6px;color:'+assignedColor+';">'+(state.weekProfiles.find(function(p){return p.id===assignedPid;})||{icon:''}).icon+'</span>' : '')+
+      html += '<div class="year-month-box">'+
+        '<div class="year-month-label" style="font-size:10px;text-transform:uppercase;letter-spacing:0.07em;color:var(--ink-faint);margin:0 0 3px 2px;font-weight:500;">'+MONTH_NAMES_SHORT[m]+'</div>'+
+        weeksHtml+
       '</div>';
-
-      d.setDate(d.getDate()+7);
     }
 
     grid.innerHTML = html;
@@ -2203,23 +2230,11 @@
     var brushActive = false;
     var lastBrushed = null;
 
-    function assignWeek(row){
-      var mon = row.dataset.weekmon;
-      if(mon === lastBrushed) return;
-      lastBrushed = mon;
-      if(!state.weekTypeAssignments) state.weekTypeAssignments = {};
-      if(yearAssignMode && yearAssignProfileId){
-        state.weekTypeAssignments[mon] = yearAssignProfileId;
-      }
-      saveData(); renderYear();
-    }
-
     grid.querySelectorAll('.year-week-row').forEach(function(row){
-      row.addEventListener('click', function(e){
+      row.addEventListener('click', function(){
         if(yearAssignMode && yearAssignProfileId){
-          var mon = row.dataset.weekmon;
           if(!state.weekTypeAssignments) state.weekTypeAssignments = {};
-          state.weekTypeAssignments[mon] = yearAssignProfileId;
+          state.weekTypeAssignments[row.dataset.weekmon] = yearAssignProfileId;
           saveData(); renderYear();
         } else {
           viewedWeekStart = new Date(row.dataset.weekmon+'T00:00:00');
@@ -2228,11 +2243,10 @@
       });
     });
 
-    // Balayage tactile/souris
     grid.addEventListener('pointerdown', function(e){
       if(!yearAssignMode||!yearAssignProfileId) return;
       brushActive = true; lastBrushed = null;
-      grid.setPointerCapture && grid.setPointerCapture(e.pointerId);
+      if(grid.setPointerCapture) grid.setPointerCapture(e.pointerId);
       e.preventDefault();
     });
     grid.addEventListener('pointermove', function(e){
@@ -2243,11 +2257,10 @@
       lastBrushed = row.dataset.weekmon;
       if(!state.weekTypeAssignments) state.weekTypeAssignments = {};
       state.weekTypeAssignments[row.dataset.weekmon] = yearAssignProfileId;
-      // Feedback immédiat sans re-render
-      row.style.outline = '1.5px solid '+(PROFILE_COLORS[yearAssignProfileId]||'#888');
+      row.style.outline = '1px solid '+(PROFILE_COLORS[yearAssignProfileId]||'#888');
       row.style.outlineOffset = '1px';
       var color = PROFILE_COLORS[yearAssignProfileId]+'99';
-      row.querySelectorAll('div').forEach(function(c){ if(c.style.background) c.style.background=color; });
+      row.querySelectorAll('div').forEach(function(c){ if(c.style.background&&c.style.background!=='transparent') c.style.background=color; });
     });
     grid.addEventListener('pointerup', function(){
       if(brushActive){ brushActive=false; lastBrushed=null; saveData(); }
@@ -2263,6 +2276,20 @@
     if(yearAssignMode && !yearAssignProfileId && state.weekProfiles&&state.weekProfiles[0])
       yearAssignProfileId = state.weekProfiles[0].id;
     renderYear();
+  });
+
+  // Navigation entre années
+  var yearPrevBtn = document.getElementById('year-prev-btn');
+  var yearNextBtn = document.getElementById('year-next-btn');
+  var yearDisplayEl = document.getElementById('year-display');
+  if(yearPrevBtn) yearPrevBtn.addEventListener('click', function(){ viewedYear--; renderYear(); });
+  if(yearNextBtn) yearNextBtn.addEventListener('click', function(){ viewedYear++; renderYear(); });
+  if(yearDisplayEl) yearDisplayEl.addEventListener('click', function(){
+    var input = prompt('Saisir une année (ex. 2030):', String(viewedYear));
+    if(input){
+      var y = parseInt(input);
+      if(y >= 2020 && y <= 2100){ viewedYear = y; renderYear(); }
+    }
   });
 
   // ============ RENDER: GOALS ============
@@ -4194,6 +4221,79 @@
     });
   }
 
+  // ============ DÉTECTION SOMMEIL INTELLIGENTE ============
+  function createSleepBlockFromDetection(sleepStartMs, wakeMs){
+    var SLEEP_MARKER = 30;
+    var sessionId = 'sl_auto'+Date.now();
+    var sleepDate = new Date(sleepStartMs);
+    var wakeDate  = new Date(wakeMs);
+    var sleepH = sleepDate.getHours();
+    var sleepM = sleepDate.getMinutes();
+    // Heures étendues si coucher après minuit (ex: 1h30 → startHour=25, startMinute=30)
+    var isPastMidnight = sleepH < 6;
+    var startHourExt = isPastMidnight ? sleepH + 24 : sleepH;
+    var totalMin = Math.round((wakeMs - sleepStartMs) / 60000);
+    var wakeH = wakeDate.getHours();
+    var wakeMin2 = wakeDate.getMinutes();
+    var todayK = dateKey(wakeDate);
+    var sleepDateKey2 = dateKey(sleepDate);
+    // Coucher
+    state.blocks.push({
+      id:'b_sldet_'+Date.now(), pillarId:'personnel',
+      title:'Sommeil auto-détecté (coucher)',
+      date: sleepDateKey2, endDate:null,
+      startHour: startHourExt, startMinute: sleepM,
+      durationMinutes: SLEEP_MARKER, goalId:null,
+      isSleepBlock:true, isLunchBlock:false,
+      sleepSessionId: sessionId, sleepWakeDate: todayK,
+      totalSleepMinutes: totalMin, notes:'Détecté depuis la dernière utilisation du téléphone'
+    });
+    // Réveil
+    state.blocks.push({
+      id:'b_sldet_'+(Date.now()+1), pillarId:'personnel',
+      title:'Sommeil auto-détecté (réveil)',
+      date: todayK, endDate:null,
+      startHour: wakeH, startMinute: wakeMin2,
+      durationMinutes: SLEEP_MARKER, goalId:null,
+      isSleepBlock:true, isLunchBlock:false,
+      sleepSessionId: sessionId, sleepWakeDate: todayK
+    });
+    saveData(); renderAgenda(); switchToView('today');
+  }
+
+  function checkSleepDetection(){
+    try{
+      var lastActive = parseInt(localStorage.getItem('boussole_last_active')||'0');
+      if(!lastActive) return;
+      var now = Date.now();
+      var gapMs = now - lastActive;
+      var gapH = gapMs / 3600000;
+      var nowHour = new Date().getHours();
+      // Critères : gap 3h–14h, heure actuelle avant 15h, pas déjà un bloc sommeil aujourd'hui
+      if(gapH < 3 || gapH > 14 || nowHour >= 15) return;
+      var todayK = dateKey(new Date());
+      var wakeDate = new Date(now);
+      var alreadyHas = state.blocks.some(function(b){
+        return b.isSleepBlock && (b.date===todayK || b.sleepWakeDate===todayK);
+      });
+      if(alreadyHas) return;
+      var banner = document.getElementById('sleep-detect-banner');
+      var msg = document.getElementById('sleep-detect-msg');
+      if(!banner || !msg) return;
+      var sleepDate = new Date(lastActive);
+      var sleepH2 = pad2(sleepDate.getHours())+'h'+pad2(sleepDate.getMinutes());
+      var wakeH2 = pad2(wakeDate.getHours())+'h'+pad2(wakeDate.getMinutes());
+      msg.textContent = 'Tu sembles avoir dormi de '+sleepH2+' à '+wakeH2+' (environ '+Math.round(gapH)+'h)';
+      banner.style.display = 'block';
+      document.getElementById('sleep-detect-confirm').onclick = function(){
+        banner.style.display = 'none';
+        createSleepBlockFromDetection(lastActive, now);
+      };
+      document.getElementById('sleep-detect-ignore').onclick = function(){ banner.style.display='none'; };
+      document.getElementById('sleep-detect-close').onclick  = function(){ banner.style.display='none'; };
+    }catch(e){}
+  }
+
   // ============ INIT ============
   // Démarrer sur Équilibre — c'est le coeur de l'application
   switchToView('balance');
@@ -4202,4 +4302,5 @@
   setInterval(renderExportReminder, 60*1000);
   startLocationTracking();
   requestNotifPermission();
+  checkSleepDetection();
 })();

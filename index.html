@@ -29,10 +29,9 @@
   <p class="sub" id="main-sub">Note ce qui te passe par la tête, on s'occupe de l'ordre.</p>
 
   <div class="tabs" id="main-tabs">
-    <button class="tab active" data-view="balance"><i class="ti ti-compass"></i> Équilibre</button>
+    <button class="tab active" data-view="balance"><i class="ti ti-compass"></i> Kairo</button>
     <button class="tab" data-view="now"><i class="ti ti-bolt"></i> Maintenant</button>
     <button class="tab" data-view="today"><i class="ti ti-calendar-event"></i> Aujourd'hui</button>
-    <button class="tab" data-view="week"><i class="ti ti-calendar-week"></i> Semaine</button>
     <button class="tab" data-view="list"><i class="ti ti-checkbox"></i> Tâches</button>
     <button class="tab" data-view="more"><i class="ti ti-dots"></i> Plus</button>
   </div>
@@ -40,6 +39,7 @@
   <div class="view" id="view-more">
     <p class="section-title">Plus</p>
     <div class="more-menu" id="more-menu">
+      <button class="more-item" data-view="week"><i class="ti ti-calendar-week"></i><span>Semaine</span></button>
       <button class="more-item" data-view="year"><i class="ti ti-calendar"></i><span>Année</span></button>
       <button class="more-item" data-view="projects"><i class="ti ti-notebook"></i><span>Projets</span></button>
       <button class="more-item" data-view="finance"><i class="ti ti-coin"></i><span>Finances</span></button>
@@ -143,9 +143,11 @@
   <div class="view" id="view-today">
     <p class="section-title">Ton agenda</p>
     <div class="day-nav">
-      <button class="iconbtn sm" id="day-prev" aria-label="Jour précédent"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6l6 6"/></svg></button>
-      <div class="day-nav-label" id="day-nav-label"></div>
-      <button class="iconbtn sm" id="day-next" aria-label="Jour suivant"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6l-6 6"/></svg></button>
+      <div class="day-nav-pill">
+        <button class="iconbtn sm day-nav-arrow" id="day-prev" aria-label="Jour précédent"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6l6 6"/></svg></button>
+        <div class="day-nav-label" id="day-nav-label"></div>
+        <button class="iconbtn sm day-nav-arrow" id="day-next" aria-label="Jour suivant"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6l-6 6"/></svg></button>
+      </div>
       <button class="btn sm" id="day-today-btn" style="margin-left:auto;">Aujourd'hui</button>
     </div>
     <p class="found-hint" style="margin-top:8px;margin-bottom:14px;">Clique sur une plage horaire pour y poser un bloc. Pour un événement sur plusieurs jours, ajoute une date de fin.</p>
@@ -271,9 +273,16 @@
   </div>
 
   <div class="view" id="view-year">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
       <p class="section-title" style="margin:0;">Planning annuel</p>
       <button class="btn ghost sm" id="year-assign-toggle-btn"><i class="ti ti-paint"></i> Assigner</button>
+    </div>
+    <div id="year-nav-header" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+      <button class="iconbtn sm" id="year-prev-btn" style="flex-shrink:0;" aria-label="Année précédente"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6l6 6"/></svg></button>
+      <div style="flex:1;text-align:center;">
+        <span id="year-display" style="font-size:16px;font-weight:600;color:var(--ink);cursor:pointer;" title="Cliquer pour saisir une année"></span>
+      </div>
+      <button class="iconbtn sm" id="year-next-btn" style="flex-shrink:0;" aria-label="Année suivante"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6l-6 6"/></svg></button>
     </div>
 
     <!-- Mode assignation : balayer pour colorier les semaines -->
@@ -710,6 +719,23 @@
         </label>
       </div>
       <button class="btn primary" id="geo-confirm-btn" style="width:100%;justify-content:center;"><i class="ti ti-check"></i> Ajouter à l'agenda</button>
+    </div>
+  </div>
+
+  <div id="sleep-detect-banner" style="display:none; position:fixed; top:0; left:0; right:0; z-index:9998; background:var(--bg-raised); border-bottom:2px solid #7B77D4; padding:14px 16px; box-shadow:0 6px 24px rgba(0,0,0,0.6);">
+    <div style="max-width:480px;margin:0 auto;">
+      <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;">
+        <span style="font-size:18px;line-height:1.3;">🌙</span>
+        <div style="flex:1;min-width:0;">
+          <div id="sleep-detect-msg" style="font-weight:700;color:var(--ink);font-size:14px;"></div>
+          <div style="font-size:12px;color:var(--ink-dim);margin-top:2px;">Créer automatiquement le bloc sommeil ?</div>
+        </div>
+        <button id="sleep-detect-close" style="background:none;border:none;cursor:pointer;color:var(--ink-dim);font-size:22px;padding:0;line-height:1;flex-shrink:0;">×</button>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn primary" id="sleep-detect-confirm" style="flex:1;justify-content:center;"><i class="ti ti-check"></i> Créer le bloc sommeil</button>
+        <button class="btn ghost" id="sleep-detect-ignore">Ignorer</button>
+      </div>
     </div>
   </div>
 
