@@ -4004,8 +4004,17 @@
       });
       wrap.querySelectorAll('[data-acc-del]').forEach(function(el){
         el.addEventListener('click', function(){
-          var acc = findItem(state.finance.accounts,{id:el.dataset.accDel});
-          deleteWithUndo(function(){ return state.finance.accounts; }, el.dataset.accDel, acc?acc.name:'compte', [renderFinanceComptes]);
+          var accId = el.dataset.accDel;
+          var acc = findItem(state.finance.accounts,{id:accId});
+          var txCount = (state.finance.transactions||[]).filter(function(t){ return t.accountId===accId; }).length;
+          var label = (acc?acc.name:'compte') + (txCount>0?' (+ '+txCount+' transactions)':'');
+          var afterDelete = function(){
+            // Also purge orphaned transactions for deleted account
+            state.finance.transactions = (state.finance.transactions||[]).filter(function(t){ return t.accountId!==accId; });
+            saveData();
+            renderFinanceComptes();
+          };
+          deleteWithUndo(function(){ return state.finance.accounts; }, accId, label, [afterDelete]);
         });
       });
     }
@@ -4053,9 +4062,12 @@
         '</div>'+
         '<div class="tx-right">'+
           '<div class="tx-amount '+(isDebit?'neg':'pos')+'">'+amtStr+'</div>'+
-          '<select class="tx-cat-sel" data-txid="'+tx.id+'">'+
-            TRANSACTION_CATEGORIES.map(function(c){ return '<option value="'+c.id+'"'+(tx.category===c.id?' selected':'')+'>'+c.emoji+' '+c.label+'</option>'; }).join('')+
-          '</select>'+
+          '<div style="display:flex;gap:4px;align-items:center;">'+
+            '<select class="tx-cat-sel" data-txid="'+tx.id+'">'+
+              TRANSACTION_CATEGORIES.map(function(c){ return '<option value="'+c.id+'"'+(tx.category===c.id?' selected':'')+'>'+c.emoji+' '+c.label+'</option>'; }).join('')+
+            '</select>'+
+            '<div class="tx-del" data-txid="'+tx.id+'" style="color:var(--ink-faint);cursor:pointer;flex-shrink:0;">'+svgIcon('trash',13)+'</div>'+
+          '</div>'+
         '</div>'+
       '</div>';
     }).join('');
@@ -4073,6 +4085,12 @@
         }
         tx.category = sel.value;
         saveData();
+      });
+    });
+    wrap.querySelectorAll('.tx-del').forEach(function(el){
+      el.addEventListener('click', function(){
+        var tx = findItem(state.finance.transactions,{id:el.dataset.txid});
+        deleteWithUndo(function(){ return state.finance.transactions; }, el.dataset.txid, tx?tx.label:'transaction', [renderTxList]);
       });
     });
   }
@@ -4283,12 +4301,18 @@
   document.getElementById('csv-cancel').addEventListener('click', closeCSVImport);
   document.getElementById('modal-csv-import').addEventListener('click', function(e){ if(e.target===this) closeCSVImport(); });
 
-  document.getElementById('csv-file-input').addEventListener('change', function(e){
-    var file=e.target.files[0];
+  var _csvLastFile = null;
+  function readCSVFile(file, encoding){
     if(!file) return;
+    _csvLastFile = file;
     var reader=new FileReader();
     reader.onload=function(ev){
       var text=ev.target.result;
+      // Auto-detect garbled encoding: if we see replacement char U+FFFD or common mojibake, switch to Latin-1
+      if(encoding==='UTF-8' && (text.indexOf('�')!==-1 || text.indexOf('Ã')!==-1)){
+        readCSVFile(file,'ISO-8859-1');
+        return;
+      }
       var parsed=parseCSVText(text);
       if(!parsed||!parsed.rows||parsed.rows.length<2){
         document.getElementById('csv-preview-info').textContent='Impossible de lire ce fichier. Vérifiez qu\'il s\'agit bien d\'un CSV valide.';
@@ -4296,17 +4320,28 @@
       }
       var mapping=detectColumns(parsed.rows);
       _csvParsed={rows:parsed.rows,mapping:mapping,accountId:_csvParsed?_csvParsed.accountId:null};
-      renderCSVPreview(parsed.rows,mapping);
+      renderCSVPreview(parsed.rows,mapping,encoding);
     };
     reader.onerror=function(){ document.getElementById('csv-preview-info').textContent='Erreur de lecture du fichier.'; };
-    reader.readAsText(file,'UTF-8');
+    reader.readAsText(file, encoding||'UTF-8');
+  }
+  document.getElementById('csv-file-input').addEventListener('change', function(e){
+    var file=e.target.files[0];
+    if(!file) return;
+    readCSVFile(file,'UTF-8');
   });
 
-  function renderCSVPreview(rows,mapping){
+  function renderCSVPreview(rows,mapping,encoding){
     var infoEl=document.getElementById('csv-preview-info');
     var mapEl=document.getElementById('csv-col-map');
     var cb=document.getElementById('csv-confirm');
-    infoEl.textContent=(rows.length-1)+' lignes détectées · '+rows[0].length+' colonnes';
+    var encLabel = encoding==='ISO-8859-1' ? ' · Latin-1' : ' · UTF-8';
+    var retryBtn = encoding!=='ISO-8859-1'
+      ? ' <button class="btn ghost sm" id="retry-latin1" style="font-size:11px;padding:3px 8px;margin-left:6px;">Caractères étranges ? → Latin-1</button>'
+      : '';
+    infoEl.innerHTML = escapeHtml((rows.length-1)+' lignes · '+rows[0].length+' colonnes'+encLabel) + retryBtn;
+    var retryEl = document.getElementById('retry-latin1');
+    if(retryEl) retryEl.addEventListener('click', function(){ readCSVFile(_csvLastFile,'ISO-8859-1'); });
     var noOpt='<option value="-1">— Ignorer —</option>';
     var colOpts=rows[0].map(function(h,i){ return '<option value="'+i+'">Col '+(i+1)+' : '+escapeHtml((h||'—').slice(0,22))+'</option>'; }).join('');
     function selFor(label,role,curCol){
