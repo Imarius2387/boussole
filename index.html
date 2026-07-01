@@ -450,8 +450,8 @@
         <span style="font-size:16px;font-weight:500;">Importer un relevé CSV</span>
         <button class="iconbtn" id="close-csv-modal" style="font-size:20px;line-height:1;">×</button>
       </div>
-      <p class="found-hint" style="margin:0 0 10px;">Relevé PDF ou CSV exporté depuis votre banque. Autant de relevés que vous voulez.</p>
-      <input type="file" id="csv-file-input" accept=".csv,.txt,.tsv,.pdf" style="margin-bottom:10px;font-size:13px;color:var(--ink);width:100%;">
+      <p class="found-hint" style="margin:0 0 10px;">CSV, Excel (.xlsx/.xls) ou PDF — autant de relevés que vous voulez.</p>
+      <input type="file" id="csv-file-input" accept=".csv,.txt,.tsv,.xlsx,.xls,.ods,.pdf" style="margin-bottom:10px;font-size:13px;color:var(--ink);width:100%;">
       <div id="csv-preview-info" style="font-size:12.5px;color:var(--ink-dim);margin-bottom:10px;"></div>
       <div id="csv-col-map" style="display:none;margin-bottom:12px;"></div>
       <div id="csv-import-stats" style="display:none;font-size:13px;color:var(--accent);margin-bottom:10px;padding:10px;background:var(--bg-raised);border-radius:8px;"></div>
@@ -850,6 +850,7 @@
   }
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

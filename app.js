@@ -4427,6 +4427,30 @@
     _csvParsed._pdfInvRef=invertRef;
   }
 
+  // ---- Excel parsing (SheetJS) ----
+  function parseExcelFile(file, onDone){
+    if(typeof XLSX === 'undefined'){
+      onDone(null,'SheetJS non chargé — vérifiez votre connexion internet.');
+      return;
+    }
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      try{
+        var data=new Uint8Array(ev.target.result);
+        var wb=XLSX.read(data,{type:'array',cellText:true,cellDates:true,dateNF:'dd/mm/yyyy'});
+        var ws=wb.Sheets[wb.SheetNames[0]];
+        var rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,dateNF:'dd/mm/yyyy',defval:''});
+        rows=rows.filter(function(r){ return r.some(function(c){ return (c||'').toString().trim().length>0; }); });
+        if(rows.length<2){ onDone(null,'Aucune donnée trouvée dans ce fichier.'); return; }
+        // Normalize cells to strings
+        rows=rows.map(function(r){ return r.map(function(c){ return (c===null||c===undefined)?'':String(c); }); });
+        onDone(rows,null);
+      }catch(e){ onDone(null,'Impossible de lire ce fichier Excel : '+e.message); }
+    };
+    reader.onerror=function(){ onDone(null,'Erreur de lecture du fichier.'); };
+    reader.readAsArrayBuffer(file);
+  }
+
   // ---- CSV Import Modal ----
   function openCSVImport(accountId){
     _csvParsed={rows:null,mapping:null,accountId:accountId};
@@ -4475,18 +4499,33 @@
   document.getElementById('csv-file-input').addEventListener('change', function(e){
     var file=e.target.files[0];
     if(!file) return;
-    var isPDF=file.name.toLowerCase().endsWith('.pdf')||file.type==='application/pdf';
-    if(isPDF){
-      document.getElementById('csv-preview-info').textContent='Lecture du PDF en cours…';
+    var fn=file.name.toLowerCase();
+    var isPDF=fn.endsWith('.pdf')||file.type==='application/pdf';
+    var isExcel=fn.endsWith('.xlsx')||fn.endsWith('.xls')||fn.endsWith('.ods')||
+      file.type==='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'||
+      file.type==='application/vnd.ms-excel';
+    function resetImportUI(msg){
+      document.getElementById('csv-preview-info').textContent=msg;
       document.getElementById('csv-col-map').style.display='none';
       document.getElementById('csv-col-map').innerHTML='';
       document.getElementById('csv-import-stats').style.display='none';
       var cb2=document.getElementById('csv-confirm');
       if(cb2){cb2.style.display='none';cb2.textContent='Importer';}
       _csvParsed={rows:null,mapping:null,accountId:_csvParsed?_csvParsed.accountId:null};
+    }
+    if(isPDF){
+      resetImportUI('Lecture du PDF en cours…');
       parsePDFFile(file,function(txs,err){
         if(err){document.getElementById('csv-preview-info').textContent=err;return;}
         renderPDFPreview(txs,[false]);
+      });
+    } else if(isExcel){
+      resetImportUI('Lecture du fichier Excel en cours…');
+      parseExcelFile(file,function(rows,err){
+        if(err){document.getElementById('csv-preview-info').textContent=err;return;}
+        var mapping=detectColumns(rows);
+        _csvParsed={rows:rows,mapping:mapping,accountId:_csvParsed?_csvParsed.accountId:null};
+        renderCSVPreview(rows,mapping,'Excel');
       });
     } else {
       readCSVFile(file,'UTF-8');
@@ -4497,8 +4536,8 @@
     var infoEl=document.getElementById('csv-preview-info');
     var mapEl=document.getElementById('csv-col-map');
     var cb=document.getElementById('csv-confirm');
-    var encLabel = encoding==='ISO-8859-1' ? ' · Latin-1' : ' · UTF-8';
-    var retryBtn = encoding!=='ISO-8859-1'
+    var encLabel = encoding==='ISO-8859-1' ? ' · Latin-1' : (encoding==='Excel' ? ' · Excel' : ' · UTF-8');
+    var retryBtn = (encoding!=='ISO-8859-1'&&encoding!=='Excel')
       ? ' <button class="btn ghost sm" id="retry-latin1" style="font-size:11px;padding:3px 8px;margin-left:6px;">Caractères étranges ? → Latin-1</button>'
       : '';
     infoEl.innerHTML = escapeHtml((rows.length-1)+' lignes · '+rows[0].length+' colonnes'+encLabel) + retryBtn;
