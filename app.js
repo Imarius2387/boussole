@@ -1,5 +1,9 @@
 (function(){
 
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/boussole/sw.js').catch(function(){});
+  }
+
   // ============ HELPERS (remplace lodash, zéro dépendance externe pour la logique) ============
   function findItem(arr, predicate){
     if(typeof predicate === 'function'){
@@ -401,22 +405,103 @@
   var SUPABASE_KEY = 'sb_publishable_1I9f0iPUhVy4tPAIh3dPIg_ivkCfA9x';
 
   var SYNC_TS_KEY = 'boussole_sync_ts';
+  var AUTH_SESSION_KEY = 'boussole_auth_session';
+
+  // ---- Identité anonyme Supabase (une par utilisateur, isolée via RLS côté serveur) ----
+  function saveAuthSession(session){
+    try {
+      localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+        expires_at: Math.floor(Date.now()/1000) + (session.expires_in || 3600),
+        user_id: session.user && session.user.id
+      }));
+    } catch(e) {}
+  }
+
+  function loadAuthSession(){
+    try { return JSON.parse(localStorage.getItem(AUTH_SESSION_KEY)); } catch(e) { return null; }
+  }
+
+  function signInAnonymously(){
+    return fetch(SUPABASE_URL + '/auth/v1/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+      body: JSON.stringify({})
+    }).then(function(r){ return r.json(); }).then(function(session){
+      if (session && session.access_token) saveAuthSession(session);
+      return session;
+    });
+  }
+
+  function refreshAuthSession(refreshToken){
+    return fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+      body: JSON.stringify({ refresh_token: refreshToken })
+    }).then(function(r){ return r.json(); }).then(function(session){
+      if (session && session.access_token) saveAuthSession(session);
+      return session;
+    });
+  }
+
+  var _authPromise = null;
+  // Retourne une session valide : réutilise celle stockée, la rafraîchit si expirée,
+  // sinon crée une nouvelle identité anonyme. Un seul appel réseau à la fois (mutualisé).
+  function ensureAuth(){
+    if (!window.fetch) return Promise.reject(new Error('fetch indisponible'));
+    var session = loadAuthSession();
+    var now = Math.floor(Date.now()/1000);
+    if (session && session.access_token && session.expires_at > now + 30) {
+      return Promise.resolve(session);
+    }
+    if (_authPromise) return _authPromise;
+    if (session && session.refresh_token) {
+      _authPromise = refreshAuthSession(session.refresh_token).then(function(s){
+        _authPromise = null;
+        return (s && s.access_token) ? s : signInAnonymously();
+      }).catch(function(){ _authPromise = null; return signInAnonymously(); });
+    } else {
+      _authPromise = signInAnonymously().then(function(s){ _authPromise = null; return s; })
+        .catch(function(e){ _authPromise = null; throw e; });
+    }
+    return _authPromise;
+  }
+
+  // Code de synchronisation = refresh token de l'identité courante (donne accès complet aux données, à ne partager qu'entre ses propres appareils)
+  function getSyncCode(){
+    var s = loadAuthSession();
+    return (s && s.refresh_token) || '';
+  }
+
+  // Relie cet appareil à une identité existante à partir d'un code obtenu sur un autre appareil
+  function pairWithSyncCode(code, cb){
+    code = (code || '').trim();
+    if (!code) { cb(new Error('Code vide.')); return; }
+    refreshAuthSession(code).then(function(session){
+      if (!session || !session.access_token) { cb(new Error('Code invalide ou expiré.')); return; }
+      localStorage.removeItem(SYNC_TS_KEY); // force la récupération des données distantes de cette identité
+      cb(null);
+    }).catch(function(e){ cb(e); });
+  }
 
   function pushToSupabase(snapshot) {
     if (!window.fetch) return;
-    var ts = new Date().toISOString();
-    fetch(SUPABASE_URL + '/rest/v1/boussole_data', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_KEY,
-        'Authorization': 'Bearer ' + SUPABASE_KEY,
-        'Prefer': 'resolution=merge-duplicates'
-      },
-      body: JSON.stringify({ id: 'main', data: snapshot, updated_at: ts })
-    })
-    .then(function() { localStorage.setItem(SYNC_TS_KEY, new Date(ts).getTime().toString()); })
-    .catch(function(){});
+    ensureAuth().then(function(session){
+      var ts = new Date().toISOString();
+      fetch(SUPABASE_URL + '/rest/v1/boussole_data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_KEY,
+          'Authorization': 'Bearer ' + session.access_token,
+          'Prefer': 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify({ id: session.user_id, data: snapshot, updated_at: ts })
+      })
+      .then(function() { localStorage.setItem(SYNC_TS_KEY, new Date(ts).getTime().toString()); })
+      .catch(function(){});
+    }).catch(function(){});
   }
 
   function applyRemoteData(remote, remoteTs) {
@@ -430,16 +515,19 @@
 
   function fetchAndApplySupabase() {
     if (!window.fetch) return;
-    fetch(SUPABASE_URL + '/rest/v1/boussole_data?id=eq.main&select=data,updated_at', {
-      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
-    })
-    .then(function(r){ return r.json(); })
-    .then(function(rows){
-      if (!rows || !rows.length || !rows[0].data) return;
-      var remoteTs = rows[0].updated_at ? new Date(rows[0].updated_at).getTime() : 0;
-      applyRemoteData(rows[0].data, remoteTs);
-    })
-    .catch(function(){});
+    ensureAuth().then(function(session){
+      // Pas de filtre id= : RLS restreint automatiquement au propriétaire (auth.uid())
+      fetch(SUPABASE_URL + '/rest/v1/boussole_data?select=data,updated_at', {
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + session.access_token }
+      })
+      .then(function(r){ return r.json(); })
+      .then(function(rows){
+        if (!rows || !rows.length || !rows[0].data) return;
+        var remoteTs = rows[0].updated_at ? new Date(rows[0].updated_at).getTime() : 0;
+        applyRemoteData(rows[0].data, remoteTs);
+      })
+      .catch(function(){});
+    }).catch(function(){});
   }
 
   function syncFromSupabase() {
@@ -448,12 +536,16 @@
     setInterval(fetchAndApplySupabase, 2 * 60 * 1000);
   }
 
+  var _saveDebounceTimer = null;
   function saveData(){
     try{
       localStorage.setItem(STORE_KEY, JSON.stringify(state));
       localStorage.setItem('boussole_last_active', Date.now().toString());
     }catch(e){}
-    pushToSupabase(JSON.parse(JSON.stringify(state)));
+    clearTimeout(_saveDebounceTimer);
+    _saveDebounceTimer = setTimeout(function(){
+      pushToSupabase(JSON.parse(JSON.stringify(state)));
+    }, 1500);
   }
 
   // ============ ANNULATION APRÈS SUPPRESSION (filet de sécurité générique, partout dans l'app) ============
@@ -548,7 +640,7 @@
   document.getElementById('search-shortcut-btn').innerHTML = svgIcon('search', 17);
 
   // ============ TABS (deux niveaux : barre principale + menu "Plus") ============
-  var SECONDARY_VIEWS = ['year','goals','projects','finance','foundations','medical','help','sleep-tracking','tasks','week'];
+  var SECONDARY_VIEWS = ['year','goals','projects','finance','foundations','medical','help','sleep-tracking','tasks','week','locations'];
   var tabs = document.querySelectorAll('.tab');
   var moreItems = document.querySelectorAll('.more-item');
   var views = document.querySelectorAll('.view');
@@ -574,6 +666,7 @@
     if(viewName === 'projects') renderProjects();
     if(viewName === 'finance') renderFinance();
     if(viewName === 'now') renderNow();
+    if(viewName === 'locations') renderLocationsList();
   }
   tabs.forEach(function(tab){
     tab.addEventListener('click', function(){ switchToView(tab.dataset.view); });
@@ -1976,6 +2069,54 @@
     e.target.value = '';
   });
 
+  // ---- Code de synchronisation entre appareils personnels ----
+  (function(){
+    var displayEl = document.getElementById('sync-code-display');
+    var copyBtn   = document.getElementById('sync-code-copy-btn');
+    var pairInput = document.getElementById('sync-code-input');
+    var pairBtn   = document.getElementById('sync-code-pair-btn');
+    var statusEl  = document.getElementById('sync-code-status');
+    if(!displayEl || !copyBtn || !pairBtn) return;
+
+    function refreshDisplay(){
+      var code = getSyncCode();
+      if(code) displayEl.value = code;
+    }
+    refreshDisplay();
+    // Le code peut n'être généré qu'après le premier aller-retour réseau au chargement
+    setTimeout(refreshDisplay, 2000);
+
+    copyBtn.addEventListener('click', function(){
+      var code = getSyncCode();
+      if(!code){ statusEl.textContent = 'Code pas encore prêt, réessaie dans quelques secondes.'; return; }
+      displayEl.value = code;
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(code).then(function(){
+          statusEl.textContent = 'Code copié.';
+        }).catch(function(){
+          displayEl.select();
+          statusEl.textContent = 'Sélectionne et copie le code manuellement.';
+        });
+      } else {
+        displayEl.select();
+        statusEl.textContent = 'Sélectionne et copie le code manuellement.';
+      }
+    });
+
+    pairBtn.addEventListener('click', function(){
+      var code = pairInput.value;
+      if(!code.trim()){ statusEl.textContent = 'Colle un code avant de continuer.'; return; }
+      var ok = confirm('Lier cet appareil va remplacer TOUTES les données présentes ici par celles associées à ce code. Continuer ?');
+      if(!ok) return;
+      statusEl.textContent = 'Connexion en cours…';
+      pairWithSyncCode(code, function(err){
+        if(err){ statusEl.textContent = 'Code invalide ou expiré.'; return; }
+        statusEl.textContent = 'Appareil lié, récupération des données…';
+        fetchAndApplySupabase();
+      });
+    });
+  })();
+
   var EXPORT_REMINDER_THRESHOLD_MS = 30*60*1000; // 30 minutes, choisi explicitement par l'utilisateur
   function renderExportReminder(){
     var wrap = document.getElementById('export-reminder-wrap');
@@ -2053,7 +2194,7 @@
       var isActive = p.id === assignedId;
       var color = PROFILE_COLORS[p.id] || '#888';
       return '<button class="week-type-chip'+(isActive?' active':'')+'" data-wppid="'+p.id+'" '+
-        'style="border-color:'+color+';'+(isActive?'background:'+color+';':'')+'">'+ p.icon+' '+p.name+'</button>';
+        'style="border-color:'+color+';'+(isActive?'background:'+color+';':'')+'">'+ escapeHtml(p.icon)+' '+escapeHtml(p.name)+'</button>';
     }).join('') + '<button class="week-type-chip" id="week-type-none" style="border-style:dashed;">✕ Aucun</button>';
 
     sel.querySelectorAll('[data-wppid]').forEach(function(btn){
@@ -2169,7 +2310,7 @@
       var color = PROFILE_COLORS[p.id]||'#888';
       var isActive = p.id === yearAssignProfileId;
       return '<button class="week-type-chip'+(isActive?' active':'')+'" data-yppid="'+p.id+'" '+
-        'style="border-color:'+color+';'+(isActive?'background:'+color+';':'')+'">'+ p.icon+' '+p.name+'</button>';
+        'style="border-color:'+color+';'+(isActive?'background:'+color+';':'')+'">'+ escapeHtml(p.icon)+' '+escapeHtml(p.name)+'</button>';
     }).join('');
     sel.querySelectorAll('[data-yppid]').forEach(function(btn){
       btn.addEventListener('click', function(){
@@ -2714,14 +2855,14 @@
     var tabsEl=document.getElementById('profile-tabs');
     if(tabsEl){
       tabsEl.innerHTML=state.weekProfiles.map(function(p){
-        return '<button class="profile-tab'+(p.id===state.activeProfileId?' active':'')+'" data-pid="'+p.id+'">'+p.icon+' '+p.name+'</button>';
+        return '<button class="profile-tab'+(p.id===state.activeProfileId?' active':'')+'" data-pid="'+p.id+'">'+ escapeHtml(p.icon)+' '+escapeHtml(p.name)+'</button>';
       }).join('');
       tabsEl.querySelectorAll('.profile-tab').forEach(function(btn){
         btn.addEventListener('click',function(){state.activeProfileId=btn.dataset.pid;saveData();renderBalance();});
       });
     }
     var cfgBtn=document.getElementById('configure-profile-btn');
-    if(cfgBtn){ cfgBtn.innerHTML='⚙️ Configurer "'+profile.name+'"'; cfgBtn.onclick=function(){startWizard(profile);}; }
+    if(cfgBtn){ cfgBtn.innerHTML='⚙️ Configurer "'+escapeHtml(profile.name)+'"'; cfgBtn.onclick=function(){startWizard(profile);}; }
     var addBtn=document.getElementById('add-profile-btn');
     if(addBtn){ addBtn.onclick=function(){
       var name=prompt('Nom du nouveau profil :');if(!name)return;
@@ -4552,18 +4693,21 @@
   }
 
   // ---- Lazy script loader ----
-  function loadScript(url, cb){
+  function loadScript(url, integrity, cb){
     if(document.querySelector('script[src="'+url+'"]')){ cb(null); return; }
     var s=document.createElement('script');
-    s.src=url; s.onload=function(){cb(null);}; s.onerror=function(){cb(new Error('Échec chargement CDN'));};
+    s.src=url;
+    if(integrity){ s.integrity=integrity; s.crossOrigin='anonymous'; }
+    s.onload=function(){cb(null);}; s.onerror=function(){cb(new Error('Échec chargement CDN'));};
     document.head.appendChild(s);
   }
 
   // ---- PDF parsing ----
   var _PDFJS_URL='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  var _PDFJS_SRI='sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e';
   var _PDFJS_WORKER='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   function parsePDFFile(file, onDone){
-    loadScript(_PDFJS_URL, function(lerr){
+    loadScript(_PDFJS_URL, _PDFJS_SRI, function(lerr){
       if(lerr||typeof pdfjsLib==='undefined'){
         onDone(null,'Connexion internet requise pour lire les PDFs (bibliothèque PDF.js).');
         return;
@@ -4708,8 +4852,9 @@
 
   // ---- Excel parsing (SheetJS — chargé à la demande) ----
   var _XLSX_URL='https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+  var _XLSX_SRI='sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT';
   function parseExcelFile(file, onDone){
-    loadScript(_XLSX_URL, function(lerr){
+    loadScript(_XLSX_URL, _XLSX_SRI, function(lerr){
       if(lerr||typeof XLSX==='undefined'){
         onDone(null,'Connexion internet requise pour lire les fichiers Excel (bibliothèque SheetJS).');
         return;
@@ -4994,7 +5139,29 @@
   var _geoPlaceHint  = document.getElementById('geo-place-hint');
   var _geoTimeHint   = document.getElementById('geo-time-hint');
   var _geoOpts          = { enableHighAccuracy: false, timeout: 10000, maximumAge: 30000 };
+  var _geoOptsTransit    = { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 };
   var _ongoingGeoBlockId = null; // ID du bloc géo actuellement "en cours" — étendu à chaque check GPS
+
+  // ---- Wake Lock : empêche l'écran de s'éteindre pendant un trajet actif détecté ----
+  // Ne fonctionne que tant que Boussole reste affichée à l'écran (aucune API web ne permet
+  // un suivi réel une fois l'app en arrière-plan ou l'appareil verrouillé).
+  var _wakeLock = null;
+  function acquireGeoWakeLock() {
+    if (!('wakeLock' in navigator) || _wakeLock || document.hidden) return;
+    navigator.wakeLock.request('screen').then(function(lock) {
+      _wakeLock = lock;
+      _wakeLock.addEventListener('release', function() { _wakeLock = null; updateWakeLockBadge(false); });
+      updateWakeLockBadge(true);
+    }).catch(function() {});
+  }
+  function releaseGeoWakeLock() {
+    if (_wakeLock) { _wakeLock.release().catch(function() {}); _wakeLock = null; }
+    updateWakeLockBadge(false);
+  }
+  function updateWakeLockBadge(active) {
+    var el = document.getElementById('geo-wakelock-badge');
+    if (el) el.style.display = active ? 'flex' : 'none';
+  }
 
   function saveGeoAnchor() {
     try { localStorage.setItem(GEO_ANCHOR_KEY, JSON.stringify({ anchorLat: _geo.anchorLat, anchorLng: _geo.anchorLng, anchorTime: _geo.anchorTime, promptedDate: _geo.prompted ? dateKey(new Date()) : '', ongoingBlockId: _ongoingGeoBlockId })); } catch(e) {}
@@ -5198,6 +5365,7 @@
         _inTransit = true;
         _stableAtDest = 0;
         _transitStart = _geo.anchorTime || _prevPos.time; // heure de départ = fin du dernier séjour
+        acquireGeoWakeLock();
       }
 
       if (_inTransit) {
@@ -5208,6 +5376,7 @@
             var trajetMin = Math.max(2, Math.round((now - _transitStart) / 60000));
             if (trajetMin <= 240) { createTrajetBlock(_transitStart, now, trajetMin); }
             _inTransit = false; _stableAtDest = 0;
+            releaseGeoWakeLock();
             _geo.anchorLat = lat; _geo.anchorLng = lng;
             _geo.anchorTime = now - 3 * 60000; // ancre posée ~3 min avant (moment d'arrêt réel)
             _geo.prompted = false;
@@ -5233,8 +5402,11 @@
       _geo.anchorLat = lat; _geo.anchorLng = lng; _geo.anchorTime = now; _geo.prompted = false;
       saveGeoAnchor(); return;
     }
-    if (haversineM(lat, lng, _geo.anchorLat, _geo.anchorLng) > 1000) {
-      // Déplacement significatif sans transit détecté (ex: premier fix après longue absence)
+    if (haversineM(lat, lng, _geo.anchorLat, _geo.anchorLng) > 400) {
+      // Déplacement significatif sans transit rapide détecté (marche lente, ou trou de suivi
+      // pendant une mise en arrière-plan) : on ne considère plus être sur le lieu précédent,
+      // même si aucun "trajet" n'a été détecté entre-temps — sinon le bloc en cours continue
+      // de s'étirer indéfiniment (durée mise à jour dans _extendOngoingBlock()).
       _geo.anchorLat = lat; _geo.anchorLng = lng; _geo.anchorTime = now; _geo.prompted = false;
       _ongoingGeoBlockId = null;
       saveGeoAnchor(); return;
@@ -5252,7 +5424,8 @@
 
   function geoCheck() {
     if (!navigator.geolocation || !state.geoTrackingEnabled) return;
-    navigator.geolocation.getCurrentPosition(onGeoPosition, function(){}, _geoOpts);
+    // Pendant un trajet en cours : plus fréquent et plus précis (meilleure précision sur début/fin de trajet)
+    navigator.geolocation.getCurrentPosition(onGeoPosition, function(){}, _inTransit ? _geoOptsTransit : _geoOpts);
   }
 
   function startLocationTracking() {
@@ -5260,12 +5433,191 @@
     loadGeoAnchor(); // restaurer l'ancre depuis localStorage
     _extendOngoingBlock(); // mise à jour immédiate à l'ouverture (sans attendre GPS)
     setTimeout(geoCheck, 5000);   // premier check rapide
-    setInterval(geoCheck, 60000); // puis toutes les minutes si app au premier plan
-    // Vérification immédiate à chaque retour au premier plan (slide-up → retour app)
+    // Boucle auto-ajustée : 60s au repos, 15s pendant un trajet détecté (au lieu d'un setInterval fixe)
+    (function scheduleNextCheck(){
+      setTimeout(function(){ geoCheck(); scheduleNextCheck(); }, _inTransit ? 15000 : 60000);
+    })();
+    // Rattrapage à chaque retour au premier plan (slide-up, changement d'onglet, restauration bfcache iOS)
+    function catchUpOnForeground(){
+      loadGeoAnchor();
+      setTimeout(geoCheck, 1000);
+      if (_inTransit) acquireGeoWakeLock(); // le Wake Lock se relâche automatiquement en arrière-plan, on le redemande au retour
+    }
     document.addEventListener('visibilitychange', function() {
-      if (!document.hidden) { loadGeoAnchor(); setTimeout(geoCheck, 1000); }
+      if (!document.hidden) catchUpOnForeground();
+    });
+    window.addEventListener('focus', catchUpOnForeground);
+    window.addEventListener('pageshow', catchUpOnForeground); // couvre le bfcache iOS Safari
+  }
+
+  // ============ MES LIEUX (pré-remplir les lieux fréquents à l'avance) ============
+  var LEAFLET_CSS_URL  = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
+  var LEAFLET_CSS_SRI  = 'sha512-h9FcoyWjHcOcmEVkxOfTLnmZFWIH0iZhZT1H2TbOq55xssQGEJHEaIm+PgoUaZbRvQTNTluNOEfb1ZRy6D3BOw==';
+  var LEAFLET_JS_URL   = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+  var LEAFLET_JS_SRI   = 'sha512-puJW3E/qXDqYp9IfhAI54BJEaWIfloJ7JWs7OeD5i6ruC9JZL1gERT1wjtwXFlh7CjE7ZJ+/vcRZRkIYIb6p4g==';
+  var LEAFLET_IMG_BASE = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/';
+
+  function loadStylesheet(url, integrity, cb){
+    if(document.querySelector('link[href="'+url+'"]')){ cb(null); return; }
+    var l = document.createElement('link');
+    l.rel = 'stylesheet'; l.href = url;
+    if(integrity){ l.integrity = integrity; l.crossOrigin = 'anonymous'; }
+    l.onload = function(){ cb(null); }; l.onerror = function(){ cb(new Error('Échec chargement CDN')); };
+    document.head.appendChild(l);
+  }
+
+  function loadLeaflet(cb){
+    if(typeof L !== 'undefined'){ cb(null); return; }
+    loadStylesheet(LEAFLET_CSS_URL, LEAFLET_CSS_SRI, function(){
+      loadScript(LEAFLET_JS_URL, LEAFLET_JS_SRI, function(jsErr){
+        if(jsErr || typeof L === 'undefined'){ cb(new Error('Connexion internet requise pour afficher la carte.')); return; }
+        L.Icon.Default.imagePath = LEAFLET_IMG_BASE;
+        cb(null);
+      });
     });
   }
+
+  var _locMap = null, _locMarker = null, _locPending = null; // _locPending = {lat,lng} en attente d'enregistrement
+
+  function renderLocationsList(){
+    var wrap = document.getElementById('locations-list');
+    if(!wrap) return;
+    var locs = state.knownLocations || [];
+    if(!locs.length){
+      wrap.innerHTML = '<div class="empty-state"><i class="ti ti-map-pin"></i><p>Aucun lieu enregistré pour l\'instant — ajoute ta maison, ton travail, ta salle de sport…</p></div>';
+      return;
+    }
+    wrap.innerHTML = locs.map(function(loc){
+      var col = pillarColor(loc.pillarId);
+      var label = pillarLabel(loc.pillarId);
+      return '<div class="goal-card" data-loccard="'+loc.id+'">'+
+        '<div class="goal-title-row">'+
+          '<div class="goal-title">'+escapeHtml(loc.name)+'</div>'+
+          '<span class="svg-icon-btn" data-editloc="'+loc.id+'">'+svgIcon('pencil',14)+'</span>'+
+        '</div>'+
+        '<div class="goal-meta">'+
+        (label ? '<span class="tag" style="color:'+col+';background:'+col+'22;">'+label+'</span>' : '') +
+        '<div class="item-del" data-delloc="'+loc.id+'" style="margin-left:auto;">'+svgIcon('trash',16)+'</div>'+
+        '</div></div>';
+    }).join('');
+
+    wrap.querySelectorAll('[data-delloc]').forEach(function(el){
+      el.addEventListener('click', function(e){
+        e.stopPropagation();
+        var loc = findItem(state.knownLocations, {id: el.dataset.delloc});
+        deleteWithUndo(function(){ return state.knownLocations; }, el.dataset.delloc, loc?loc.name:'lieu', [renderLocationsList]);
+      });
+    });
+    wrap.querySelectorAll('[data-editloc]').forEach(function(el){
+      el.addEventListener('click', function(){ openLocationForm(el.dataset.editloc); });
+    });
+  }
+
+  function placeLocationMarker(lat, lng){
+    _locPending = {lat: lat, lng: lng};
+    if(_locMarker){ _locMarker.setLatLng([lat, lng]); }
+    else {
+      _locMarker = L.marker([lat, lng], {draggable:true}).addTo(_locMap);
+      _locMarker.on('dragend', function(){ var p = _locMarker.getLatLng(); _locPending = {lat: p.lat, lng: p.lng}; });
+    }
+    _locMap.setView([lat, lng], Math.max(_locMap.getZoom(), 15));
+  }
+
+  function initLocationMap(initial){
+    var container = document.getElementById('location-map');
+    if(!container) return;
+    var startLat = initial ? initial.lat : 46.6034; // centre France par défaut si aucun lieu déjà connu
+    var startLng = initial ? initial.lng : 1.8883;
+    var startZoom = initial ? 15 : 5;
+
+    if(_locMap){ _locMap.remove(); _locMap = null; _locMarker = null; }
+    _locMap = L.map('location-map').setView([startLat, startLng], startZoom);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap'
+    }).addTo(_locMap);
+
+    if(initial) placeLocationMarker(initial.lat, initial.lng);
+
+    _locMap.on('click', function(e){ placeLocationMarker(e.latlng.lat, e.latlng.lng); });
+  }
+
+  function openLocationForm(locationId){
+    var card = document.getElementById('location-form-card');
+    var nameInput = document.getElementById('location-form-name');
+    var pillarSel = document.getElementById('location-form-pillar');
+    var idInput = document.getElementById('location-form-id');
+    var hint = document.getElementById('location-form-hint');
+    var existing = locationId ? findItem(state.knownLocations, {id: locationId}) : null;
+
+    idInput.value = existing ? existing.id : '';
+    nameInput.value = existing ? existing.name : '';
+    pillarSel.value = existing ? existing.pillarId : 'personnel';
+    _locPending = existing ? {lat: existing.lat, lng: existing.lng} : null;
+    hint.textContent = 'Recherche une adresse, utilise ta position actuelle, ou clique directement sur la carte pour placer le repère.';
+    card.style.display = 'block';
+    card.scrollIntoView({behavior:'smooth', block:'nearest'});
+
+    loadLeaflet(function(err){
+      if(err){ hint.textContent = err.message; return; }
+      initLocationMap(_locPending);
+    });
+  }
+
+  document.getElementById('add-location-btn').addEventListener('click', function(){ openLocationForm(null); });
+
+  document.getElementById('location-form-cancel').addEventListener('click', function(){
+    document.getElementById('location-form-card').style.display = 'none';
+  });
+
+  document.getElementById('location-use-current-btn').addEventListener('click', function(){
+    var hint = document.getElementById('location-form-hint');
+    if(!navigator.geolocation){ hint.textContent = 'Géolocalisation indisponible sur cet appareil.'; return; }
+    hint.textContent = 'Localisation en cours…';
+    navigator.geolocation.getCurrentPosition(function(pos){
+      placeLocationMarker(pos.coords.latitude, pos.coords.longitude);
+      hint.textContent = 'Position actuelle placée sur la carte.';
+    }, function(){
+      hint.textContent = 'Impossible de récupérer ta position.';
+    }, {enableHighAccuracy:true, timeout:10000, maximumAge:0});
+  });
+
+  document.getElementById('location-search-btn').addEventListener('click', function(){
+    var q = document.getElementById('location-search-input').value.trim();
+    var hint = document.getElementById('location-form-hint');
+    if(!q) return;
+    hint.textContent = 'Recherche…';
+    fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(q)+'&format=json&limit=1', {
+      headers: { 'Accept-Language': 'fr' }
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(results){
+      if(!results || !results.length){ hint.textContent = 'Aucune adresse trouvée.'; return; }
+      var r = results[0];
+      placeLocationMarker(parseFloat(r.lat), parseFloat(r.lon));
+      hint.textContent = 'Adresse trouvée : ' + r.display_name;
+    })
+    .catch(function(){ hint.textContent = 'Recherche impossible (connexion internet requise).'; });
+  });
+
+  document.getElementById('location-form-save').addEventListener('click', function(){
+    var name = document.getElementById('location-form-name').value.trim();
+    var pillar = document.getElementById('location-form-pillar').value;
+    var id = document.getElementById('location-form-id').value;
+    var hint = document.getElementById('location-form-hint');
+    if(!name){ document.getElementById('location-form-name').focus(); return; }
+    if(!_locPending){ hint.textContent = 'Place un repère sur la carte avant d\'enregistrer.'; return; }
+    if(!state.knownLocations) state.knownLocations = [];
+    if(id){
+      var existing = findItem(state.knownLocations, {id: id});
+      if(existing){ existing.name = name; existing.pillarId = pillar; existing.lat = _locPending.lat; existing.lng = _locPending.lng; }
+    } else {
+      state.knownLocations.push({ id: 'loc_'+Date.now(), name: name, lat: _locPending.lat, lng: _locPending.lng, pillarId: pillar });
+    }
+    saveData();
+    document.getElementById('location-form-card').style.display = 'none';
+    renderLocationsList();
+  });
 
   // ============ DÉTECTION SOMMEIL INTELLIGENTE ============
   function createSleepBlockFromDetection(sleepStartMs, wakeMs){
@@ -5315,8 +5667,9 @@
       var gapMs = now - lastActive;
       var gapH = gapMs / 3600000;
       var nowHour = new Date().getHours();
-      // Critères : gap 3h–14h, heure actuelle avant 15h, pas déjà un bloc sommeil aujourd'hui
-      if(gapH < 3 || gapH > 14 || nowHour >= 15) return;
+      // Critères : gap 3h–14h, heure actuelle avant 22h (couvre aussi qui n'ouvre l'app que l'après-midi/soir),
+      // pas déjà un bloc sommeil aujourd'hui (garde alreadyHas ci-dessous, donc pas de doublon même en élargissant la fenêtre)
+      if(gapH < 3 || gapH > 14 || nowHour >= 22) return;
       var todayK = dateKey(new Date());
       var wakeDate = new Date(now);
       var alreadyHas = state.blocks.some(function(b){
@@ -5339,6 +5692,15 @@
       document.getElementById('sleep-detect-close').onclick  = function(){ banner.style.display='none'; };
     }catch(e){}
   }
+
+  // Rattrapage indépendant du suivi géo (marche même si la géoloc est désactivée) : un onglet
+  // resté ouvert depuis la veille (bfcache iOS notamment) ne relance jamais le script au chargement,
+  // donc il faut aussi vérifier à chaque retour au premier plan.
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) checkSleepDetection();
+  });
+  window.addEventListener('focus', checkSleepDetection);
+  window.addEventListener('pageshow', checkSleepDetection);
 
   // ============ INIT ============
   // Démarrer sur Équilibre — c'est le coeur de l'application

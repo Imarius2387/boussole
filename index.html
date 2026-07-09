@@ -8,8 +8,9 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com https://cdn.sheetjs.com; worker-src 'self' https://cdnjs.cloudflare.com blob:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://cdnjs.cloudflare.com https://*.tile.openstreetmap.org; connect-src 'self' https://cbrcvrvwndxudgzeiqih.supabase.co https://nominatim.openstreetmap.org; base-uri 'self'; form-action 'self';">
   <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.47.0/iconfont/tabler-icons.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.44.0/tabler-icons.min.css" integrity="sha512-51mlV3yV4w8hWM53dgWBoArshl8CTDwsDH0Oqzpp4JmwuIxJ3TUlMknQSgu/V2sBGZepqacbBhkVleh+9EeyhA==" crossorigin="anonymous" referrerpolicy="no-referrer">
 </head>
 <body>
 <div id="custom-background-layer"></div>
@@ -46,6 +47,7 @@
       <button class="more-item" data-view="foundations"><i class="ti ti-compass"></i><span>Fondations</span></button>
       <button class="more-item" data-view="medical"><i class="ti ti-stethoscope"></i><span>Suivi santé & forme</span></button>
       <button class="more-item" data-view="sleep-tracking"><i class="ti ti-moon"></i><span>Suivi sommeil</span></button>
+      <button class="more-item" data-view="locations"><i class="ti ti-map-pin"></i><span>Mes lieux</span></button>
       <button class="more-item" data-view="help"><i class="ti ti-help"></i><span>Aide & contact</span></button>
     </div>
   </div>
@@ -192,7 +194,7 @@
     </div>
 
     <details class="sleep-collapse" id="lunch-collapse">
-      <summary><i class="ti ti-toolbox" style="font-size:13px;"></i> Déjeuner de ce midi</summary>
+      <summary><i class="ti ti-tools" style="font-size:13px;"></i> Déjeuner de ce midi</summary>
       <div>
         <div class="goal-form-row">
           <div style="flex:1;">
@@ -760,6 +762,40 @@
     <div id="sleep-tracking-chart"></div>
   </div>
 
+  <div class="view" id="view-locations">
+    <p class="section-title">Mes lieux</p>
+    <p class="found-hint" style="margin-top:-4px;">Enregistre à l'avance les lieux que tu fréquentes le plus (maison, travail, salle de sport…) pour que Boussole les reconnaisse automatiquement, sans avoir à les nommer sur le moment.</p>
+
+    <div id="locations-list"></div>
+
+    <button class="btn primary sm full" id="add-location-btn" style="margin-top:12px;"><i class="ti ti-map-pin-plus"></i> Ajouter un lieu</button>
+
+    <div id="location-form-card" style="display:none;margin-top:14px;padding:12px;border:1px solid var(--card-border);border-radius:var(--radius);">
+      <input type="hidden" id="location-form-id">
+      <input type="text" class="found-input" id="location-form-name" placeholder="Nom du lieu (ex : Maison, Salle de sport…)" style="margin-bottom:8px;">
+      <select class="found-input" id="location-form-pillar" style="margin-bottom:10px;">
+        <option value="professionnel">Professionnel</option>
+        <option value="personnel">Personnel</option>
+        <option value="familial">Familial</option>
+        <option value="social">Social</option>
+      </select>
+
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <input type="text" class="found-input" id="location-search-input" placeholder="Rechercher une adresse…" style="flex:1;margin:0;">
+        <button class="btn sm" id="location-search-btn"><i class="ti ti-search"></i></button>
+      </div>
+      <button class="btn sm full" id="location-use-current-btn" style="margin-bottom:10px;"><i class="ti ti-current-location"></i> Utiliser ma position actuelle</button>
+
+      <div id="location-map" style="height:220px;border-radius:var(--radius-sm);overflow:hidden;margin-bottom:8px;"></div>
+      <p class="found-hint" id="location-form-hint" style="margin:0 0 10px;">Recherche une adresse, utilise ta position actuelle, ou clique directement sur la carte pour placer le repère.</p>
+
+      <div style="display:flex;gap:8px;">
+        <button class="btn primary sm" id="location-form-save" style="flex:1;justify-content:center;">Enregistrer</button>
+        <button class="btn ghost sm" id="location-form-cancel">Annuler</button>
+      </div>
+    </div>
+  </div>
+
   <div class="view" id="view-help">
     <p class="section-title">Aide & contact</p>
     <div class="sub-tabs" id="help-sub-tabs">
@@ -771,11 +807,15 @@
     <div class="subview active" id="help-sub-faq">
       <div class="faq-item">
         <div class="faq-q">Mes données sont-elles envoyées sur internet ?</div>
-        <div class="faq-a">Non. Boussole est un fichier que tu gardes sur ton appareil ; tout ce que tu notes reste dans ton navigateur, rien n'est transmis à un serveur.</div>
+        <div class="faq-a">Tes données restent d'abord dans ton navigateur, sur cet appareil. En plus de ça, Boussole en garde automatiquement une copie chiffrée (HTTPS) sur un serveur sécurisé, accessible uniquement par toi — personne d'autre, y compris les autres personnes qui utilisent Boussole, ne peut y accéder. Ça te permet de ne pas tout perdre si tu changes de téléphone ou effaces ton navigateur. Voir « Synchroniser mes appareils » ci-dessous.</div>
       </div>
       <div class="faq-item">
         <div class="faq-q">Comment je sauvegarde mes données si je change de téléphone ou de navigateur ?</div>
-        <div class="faq-a">En bas de la page Maintenant, le bouton « Télécharger une sauvegarde » crée un fichier que tu peux ensuite restaurer avec « Restaurer depuis un fichier », sur n'importe quel appareil.</div>
+        <div class="faq-a">Deux façons : (1) le bouton « Télécharger une sauvegarde » en bas de cette page crée un fichier que tu restaures ensuite avec « Restaurer depuis un fichier », sur n'importe quel appareil ; (2) ton « code de synchronisation » (juste en dessous) relie automatiquement un nouvel appareil à tes données existantes.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">Quelqu'un d'autre peut-il voir mes données ?</div>
+        <div class="faq-a">Non. Chaque personne qui utilise Boussole a sa propre copie isolée — même en connaissant l'adresse technique du serveur, il est impossible pour quelqu'un d'autre de lire ou modifier tes données sans ton code de synchronisation personnel. Ne partage ce code qu'entre tes propres appareils.</div>
       </div>
       <div class="faq-item">
         <div class="faq-q">J'ai supprimé quelque chose par erreur, comment je le récupère ?</div>
@@ -788,6 +828,10 @@
       <div class="faq-item">
         <div class="faq-q">Comment je retrouve rapidement une tâche ou un objectif précis ?</div>
         <div class="faq-a">La petite loupe en haut de l'écran t'amène directement sur l'onglet « Tout » avec le champ de recherche déjà prêt à utiliser.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">La détection automatique de lieux/trajets fonctionne-t-elle même écran éteint ou app fermée ?</div>
+        <div class="faq-a">Non — c'est une limite des navigateurs (surtout sur iPhone) : la détection ne tourne que pendant que Boussole est affichée à l'écran. Pendant un trajet repéré (vélo, voiture, marche), l'app garde l'écran allumé pour ne pas interrompre le suivi ; pense à laisser l'app ouverte à l'écran le temps du trajet si tu veux qu'il soit détecté automatiquement. En revenant sur l'app après l'avoir quittée, elle rattrape ta position immédiatement.</div>
       </div>
     </div>
 
@@ -815,10 +859,29 @@
     <button class="btn sm" id="import-data-btn"><i class="ti ti-upload"></i> Restaurer depuis un fichier</button>
     <input type="file" id="import-file-input" accept="application/json" style="display:none;">
   </div>
+
+  <div class="sync-code-block" style="margin:18px 16px 0;padding:12px;border:1px solid var(--card-border);border-radius:var(--radius);">
+    <p class="found-hint" style="margin:0 0 8px;font-weight:700;color:var(--ink);">Synchroniser mes appareils</p>
+    <p class="found-hint" style="margin:0 0 10px;">Ce code donne un accès complet à tes données. Ne le partage qu'entre tes propres appareils, jamais avec quelqu'un d'autre.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+      <input type="text" class="found-input" id="sync-code-display" value="" readonly placeholder="Ouvre l'app pour générer ton code…" style="flex:1;min-width:160px;margin:0;font-family:monospace;font-size:12px;">
+      <button class="btn sm" id="sync-code-copy-btn"><i class="ti ti-copy"></i> Copier mon code</button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <input type="text" class="found-input" id="sync-code-input" placeholder="Coller un code depuis un autre appareil…" style="flex:1;min-width:160px;margin:0;font-family:monospace;font-size:12px;">
+      <button class="btn sm" id="sync-code-pair-btn"><i class="ti ti-link"></i> Lier cet appareil</button>
+    </div>
+    <p class="found-hint" id="sync-code-status" style="margin:8px 0 0;"></p>
+  </div>
+
   <p class="footer-note" style="margin-top:14px;">
     <button class="btn ghost sm" id="reset-data-btn"><i class="ti ti-refresh"></i> Tout réinitialiser (efface tes données de cet appareil)</button>
   </p>
 </div>
+
+  <div id="geo-wakelock-badge" style="display:none; position:fixed; top:8px; right:8px; z-index:9998; align-items:center; gap:6px; background:var(--bg-raised); border:1px solid #6EBF8B; border-radius:999px; padding:5px 10px; font-size:11px; color:var(--ink-dim); box-shadow:0 4px 12px rgba(0,0,0,0.4);">
+    <i class="ti ti-lock" style="color:#6EBF8B;"></i> Écran maintenu allumé le temps du trajet
+  </div>
 
   <div id="geo-banner" style="display:none; position:fixed; top:0; left:0; right:0; z-index:9999; background:var(--bg-raised); border-bottom:2px solid #6EBF8B; padding:14px 16px; box-shadow:0 6px 24px rgba(0,0,0,0.6);">
     <div style="max-width:480px;margin:0 auto;">
@@ -894,11 +957,6 @@
   <button class="btn primary sm" id="undo-toast-btn">Annuler</button>
 </div>
 
-<script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/boussole/sw.js').catch(function(){});
-  }
-</script>
 <script src="app.js"></script>
 </body>
 </html>

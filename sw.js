@@ -15,6 +15,8 @@ self.addEventListener('activate', function(e) {
 });
 
 self.addEventListener('fetch', function(e) {
+  if (new URL(e.request.url).origin !== location.origin) return; // ne pas intercepter/cacher les appels cross-origin (Supabase, CDN, etc.)
+  if (e.request.method !== 'GET') return; // le Cache Storage ne supporte que les requêtes GET
   e.respondWith(
     fetch(e.request).then(function(r) {
       var clone = r.clone();

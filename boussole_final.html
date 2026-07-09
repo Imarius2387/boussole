@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -8,9 +8,8 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.47.0/iconfont/tabler-icons.min.css">
-<style>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com https://cdn.sheetjs.com; worker-src 'self' https://cdnjs.cloudflare.com blob:; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; font-src 'self' https://cdnjs.cloudflare.com; img-src 'self' data: blob: https://cdnjs.cloudflare.com https://*.tile.openstreetmap.org; connect-src 'self' https://cbrcvrvwndxudgzeiqih.supabase.co https://nominatim.openstreetmap.org; base-uri 'self'; form-action 'self';">
+  <style>
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap');
 
   :root{
@@ -597,6 +596,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     .finance-grid{grid-template-columns:1fr;}
   }
 </style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.44.0/tabler-icons.min.css" integrity="sha512-51mlV3yV4w8hWM53dgWBoArshl8CTDwsDH0Oqzpp4JmwuIxJ3TUlMknQSgu/V2sBGZepqacbBhkVleh+9EeyhA==" crossorigin="anonymous" referrerpolicy="no-referrer">
 </head>
 <body>
 <div id="custom-background-layer"></div>
@@ -633,6 +633,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
       <button class="more-item" data-view="foundations"><i class="ti ti-compass"></i><span>Fondations</span></button>
       <button class="more-item" data-view="medical"><i class="ti ti-stethoscope"></i><span>Suivi santé & forme</span></button>
       <button class="more-item" data-view="sleep-tracking"><i class="ti ti-moon"></i><span>Suivi sommeil</span></button>
+      <button class="more-item" data-view="locations"><i class="ti ti-map-pin"></i><span>Mes lieux</span></button>
       <button class="more-item" data-view="help"><i class="ti ti-help"></i><span>Aide & contact</span></button>
     </div>
   </div>
@@ -779,7 +780,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     </div>
 
     <details class="sleep-collapse" id="lunch-collapse">
-      <summary><i class="ti ti-toolbox" style="font-size:13px;"></i> Déjeuner de ce midi</summary>
+      <summary><i class="ti ti-tools" style="font-size:13px;"></i> Déjeuner de ce midi</summary>
       <div>
         <div class="goal-form-row">
           <div style="flex:1;">
@@ -1347,6 +1348,40 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     <div id="sleep-tracking-chart"></div>
   </div>
 
+  <div class="view" id="view-locations">
+    <p class="section-title">Mes lieux</p>
+    <p class="found-hint" style="margin-top:-4px;">Enregistre à l'avance les lieux que tu fréquentes le plus (maison, travail, salle de sport…) pour que Boussole les reconnaisse automatiquement, sans avoir à les nommer sur le moment.</p>
+
+    <div id="locations-list"></div>
+
+    <button class="btn primary sm full" id="add-location-btn" style="margin-top:12px;"><i class="ti ti-map-pin-plus"></i> Ajouter un lieu</button>
+
+    <div id="location-form-card" style="display:none;margin-top:14px;padding:12px;border:1px solid var(--card-border);border-radius:var(--radius);">
+      <input type="hidden" id="location-form-id">
+      <input type="text" class="found-input" id="location-form-name" placeholder="Nom du lieu (ex : Maison, Salle de sport…)" style="margin-bottom:8px;">
+      <select class="found-input" id="location-form-pillar" style="margin-bottom:10px;">
+        <option value="professionnel">Professionnel</option>
+        <option value="personnel">Personnel</option>
+        <option value="familial">Familial</option>
+        <option value="social">Social</option>
+      </select>
+
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <input type="text" class="found-input" id="location-search-input" placeholder="Rechercher une adresse…" style="flex:1;margin:0;">
+        <button class="btn sm" id="location-search-btn"><i class="ti ti-search"></i></button>
+      </div>
+      <button class="btn sm full" id="location-use-current-btn" style="margin-bottom:10px;"><i class="ti ti-current-location"></i> Utiliser ma position actuelle</button>
+
+      <div id="location-map" style="height:220px;border-radius:var(--radius-sm);overflow:hidden;margin-bottom:8px;"></div>
+      <p class="found-hint" id="location-form-hint" style="margin:0 0 10px;">Recherche une adresse, utilise ta position actuelle, ou clique directement sur la carte pour placer le repère.</p>
+
+      <div style="display:flex;gap:8px;">
+        <button class="btn primary sm" id="location-form-save" style="flex:1;justify-content:center;">Enregistrer</button>
+        <button class="btn ghost sm" id="location-form-cancel">Annuler</button>
+      </div>
+    </div>
+  </div>
+
   <div class="view" id="view-help">
     <p class="section-title">Aide & contact</p>
     <div class="sub-tabs" id="help-sub-tabs">
@@ -1358,11 +1393,15 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     <div class="subview active" id="help-sub-faq">
       <div class="faq-item">
         <div class="faq-q">Mes données sont-elles envoyées sur internet ?</div>
-        <div class="faq-a">Non. Boussole est un fichier que tu gardes sur ton appareil ; tout ce que tu notes reste dans ton navigateur, rien n'est transmis à un serveur.</div>
+        <div class="faq-a">Tes données restent d'abord dans ton navigateur, sur cet appareil. En plus de ça, Boussole en garde automatiquement une copie chiffrée (HTTPS) sur un serveur sécurisé, accessible uniquement par toi — personne d'autre, y compris les autres personnes qui utilisent Boussole, ne peut y accéder. Ça te permet de ne pas tout perdre si tu changes de téléphone ou effaces ton navigateur. Voir « Synchroniser mes appareils » ci-dessous.</div>
       </div>
       <div class="faq-item">
         <div class="faq-q">Comment je sauvegarde mes données si je change de téléphone ou de navigateur ?</div>
-        <div class="faq-a">En bas de la page Maintenant, le bouton « Télécharger une sauvegarde » crée un fichier que tu peux ensuite restaurer avec « Restaurer depuis un fichier », sur n'importe quel appareil.</div>
+        <div class="faq-a">Deux façons : (1) le bouton « Télécharger une sauvegarde » en bas de cette page crée un fichier que tu restaures ensuite avec « Restaurer depuis un fichier », sur n'importe quel appareil ; (2) ton « code de synchronisation » (juste en dessous) relie automatiquement un nouvel appareil à tes données existantes.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">Quelqu'un d'autre peut-il voir mes données ?</div>
+        <div class="faq-a">Non. Chaque personne qui utilise Boussole a sa propre copie isolée — même en connaissant l'adresse technique du serveur, il est impossible pour quelqu'un d'autre de lire ou modifier tes données sans ton code de synchronisation personnel. Ne partage ce code qu'entre tes propres appareils.</div>
       </div>
       <div class="faq-item">
         <div class="faq-q">J'ai supprimé quelque chose par erreur, comment je le récupère ?</div>
@@ -1375,6 +1414,10 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
       <div class="faq-item">
         <div class="faq-q">Comment je retrouve rapidement une tâche ou un objectif précis ?</div>
         <div class="faq-a">La petite loupe en haut de l'écran t'amène directement sur l'onglet « Tout » avec le champ de recherche déjà prêt à utiliser.</div>
+      </div>
+      <div class="faq-item">
+        <div class="faq-q">La détection automatique de lieux/trajets fonctionne-t-elle même écran éteint ou app fermée ?</div>
+        <div class="faq-a">Non — c'est une limite des navigateurs (surtout sur iPhone) : la détection ne tourne que pendant que Boussole est affichée à l'écran. Pendant un trajet repéré (vélo, voiture, marche), l'app garde l'écran allumé pour ne pas interrompre le suivi ; pense à laisser l'app ouverte à l'écran le temps du trajet si tu veux qu'il soit détecté automatiquement. En revenant sur l'app après l'avoir quittée, elle rattrape ta position immédiatement.</div>
       </div>
     </div>
 
@@ -1402,10 +1445,29 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     <button class="btn sm" id="import-data-btn"><i class="ti ti-upload"></i> Restaurer depuis un fichier</button>
     <input type="file" id="import-file-input" accept="application/json" style="display:none;">
   </div>
+
+  <div class="sync-code-block" style="margin:18px 16px 0;padding:12px;border:1px solid var(--card-border);border-radius:var(--radius);">
+    <p class="found-hint" style="margin:0 0 8px;font-weight:700;color:var(--ink);">Synchroniser mes appareils</p>
+    <p class="found-hint" style="margin:0 0 10px;">Ce code donne un accès complet à tes données. Ne le partage qu'entre tes propres appareils, jamais avec quelqu'un d'autre.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+      <input type="text" class="found-input" id="sync-code-display" value="" readonly placeholder="Ouvre l'app pour générer ton code…" style="flex:1;min-width:160px;margin:0;font-family:monospace;font-size:12px;">
+      <button class="btn sm" id="sync-code-copy-btn"><i class="ti ti-copy"></i> Copier mon code</button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <input type="text" class="found-input" id="sync-code-input" placeholder="Coller un code depuis un autre appareil…" style="flex:1;min-width:160px;margin:0;font-family:monospace;font-size:12px;">
+      <button class="btn sm" id="sync-code-pair-btn"><i class="ti ti-link"></i> Lier cet appareil</button>
+    </div>
+    <p class="found-hint" id="sync-code-status" style="margin:8px 0 0;"></p>
+  </div>
+
   <p class="footer-note" style="margin-top:14px;">
     <button class="btn ghost sm" id="reset-data-btn"><i class="ti ti-refresh"></i> Tout réinitialiser (efface tes données de cet appareil)</button>
   </p>
 </div>
+
+  <div id="geo-wakelock-badge" style="display:none; position:fixed; top:8px; right:8px; z-index:9998; align-items:center; gap:6px; background:var(--bg-raised); border:1px solid #6EBF8B; border-radius:999px; padding:5px 10px; font-size:11px; color:var(--ink-dim); box-shadow:0 4px 12px rgba(0,0,0,0.4);">
+    <i class="ti ti-lock" style="color:#6EBF8B;"></i> Écran maintenu allumé le temps du trajet
+  </div>
 
   <div id="geo-banner" style="display:none; position:fixed; top:0; left:0; right:0; z-index:9999; background:var(--bg-raised); border-bottom:2px solid #6EBF8B; padding:14px 16px; box-shadow:0 6px 24px rgba(0,0,0,0.6);">
     <div style="max-width:480px;margin:0 auto;">
@@ -1482,13 +1544,11 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
 </div>
 
 <script>
+(function(){
+
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/boussole/sw.js').catch(function(){});
   }
-</script>
-
-<script>
-(function(){
 
   // ============ HELPERS (remplace lodash, zéro dépendance externe pour la logique) ============
   function findItem(arr, predicate){
@@ -1891,22 +1951,103 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   var SUPABASE_KEY = 'sb_publishable_1I9f0iPUhVy4tPAIh3dPIg_ivkCfA9x';
 
   var SYNC_TS_KEY = 'boussole_sync_ts';
+  var AUTH_SESSION_KEY = 'boussole_auth_session';
+
+  // ---- Identité anonyme Supabase (une par utilisateur, isolée via RLS côté serveur) ----
+  function saveAuthSession(session){
+    try {
+      localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+        expires_at: Math.floor(Date.now()/1000) + (session.expires_in || 3600),
+        user_id: session.user && session.user.id
+      }));
+    } catch(e) {}
+  }
+
+  function loadAuthSession(){
+    try { return JSON.parse(localStorage.getItem(AUTH_SESSION_KEY)); } catch(e) { return null; }
+  }
+
+  function signInAnonymously(){
+    return fetch(SUPABASE_URL + '/auth/v1/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+      body: JSON.stringify({})
+    }).then(function(r){ return r.json(); }).then(function(session){
+      if (session && session.access_token) saveAuthSession(session);
+      return session;
+    });
+  }
+
+  function refreshAuthSession(refreshToken){
+    return fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+      body: JSON.stringify({ refresh_token: refreshToken })
+    }).then(function(r){ return r.json(); }).then(function(session){
+      if (session && session.access_token) saveAuthSession(session);
+      return session;
+    });
+  }
+
+  var _authPromise = null;
+  // Retourne une session valide : réutilise celle stockée, la rafraîchit si expirée,
+  // sinon crée une nouvelle identité anonyme. Un seul appel réseau à la fois (mutualisé).
+  function ensureAuth(){
+    if (!window.fetch) return Promise.reject(new Error('fetch indisponible'));
+    var session = loadAuthSession();
+    var now = Math.floor(Date.now()/1000);
+    if (session && session.access_token && session.expires_at > now + 30) {
+      return Promise.resolve(session);
+    }
+    if (_authPromise) return _authPromise;
+    if (session && session.refresh_token) {
+      _authPromise = refreshAuthSession(session.refresh_token).then(function(s){
+        _authPromise = null;
+        return (s && s.access_token) ? s : signInAnonymously();
+      }).catch(function(){ _authPromise = null; return signInAnonymously(); });
+    } else {
+      _authPromise = signInAnonymously().then(function(s){ _authPromise = null; return s; })
+        .catch(function(e){ _authPromise = null; throw e; });
+    }
+    return _authPromise;
+  }
+
+  // Code de synchronisation = refresh token de l'identité courante (donne accès complet aux données, à ne partager qu'entre ses propres appareils)
+  function getSyncCode(){
+    var s = loadAuthSession();
+    return (s && s.refresh_token) || '';
+  }
+
+  // Relie cet appareil à une identité existante à partir d'un code obtenu sur un autre appareil
+  function pairWithSyncCode(code, cb){
+    code = (code || '').trim();
+    if (!code) { cb(new Error('Code vide.')); return; }
+    refreshAuthSession(code).then(function(session){
+      if (!session || !session.access_token) { cb(new Error('Code invalide ou expiré.')); return; }
+      localStorage.removeItem(SYNC_TS_KEY); // force la récupération des données distantes de cette identité
+      cb(null);
+    }).catch(function(e){ cb(e); });
+  }
 
   function pushToSupabase(snapshot) {
     if (!window.fetch) return;
-    var ts = new Date().toISOString();
-    fetch(SUPABASE_URL + '/rest/v1/boussole_data', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_KEY,
-        'Authorization': 'Bearer ' + SUPABASE_KEY,
-        'Prefer': 'resolution=merge-duplicates'
-      },
-      body: JSON.stringify({ id: 'main', data: snapshot, updated_at: ts })
-    })
-    .then(function() { localStorage.setItem(SYNC_TS_KEY, new Date(ts).getTime().toString()); })
-    .catch(function(){});
+    ensureAuth().then(function(session){
+      var ts = new Date().toISOString();
+      fetch(SUPABASE_URL + '/rest/v1/boussole_data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_KEY,
+          'Authorization': 'Bearer ' + session.access_token,
+          'Prefer': 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify({ id: session.user_id, data: snapshot, updated_at: ts })
+      })
+      .then(function() { localStorage.setItem(SYNC_TS_KEY, new Date(ts).getTime().toString()); })
+      .catch(function(){});
+    }).catch(function(){});
   }
 
   function applyRemoteData(remote, remoteTs) {
@@ -1920,16 +2061,19 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
 
   function fetchAndApplySupabase() {
     if (!window.fetch) return;
-    fetch(SUPABASE_URL + '/rest/v1/boussole_data?id=eq.main&select=data,updated_at', {
-      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
-    })
-    .then(function(r){ return r.json(); })
-    .then(function(rows){
-      if (!rows || !rows.length || !rows[0].data) return;
-      var remoteTs = rows[0].updated_at ? new Date(rows[0].updated_at).getTime() : 0;
-      applyRemoteData(rows[0].data, remoteTs);
-    })
-    .catch(function(){});
+    ensureAuth().then(function(session){
+      // Pas de filtre id= : RLS restreint automatiquement au propriétaire (auth.uid())
+      fetch(SUPABASE_URL + '/rest/v1/boussole_data?select=data,updated_at', {
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + session.access_token }
+      })
+      .then(function(r){ return r.json(); })
+      .then(function(rows){
+        if (!rows || !rows.length || !rows[0].data) return;
+        var remoteTs = rows[0].updated_at ? new Date(rows[0].updated_at).getTime() : 0;
+        applyRemoteData(rows[0].data, remoteTs);
+      })
+      .catch(function(){});
+    }).catch(function(){});
   }
 
   function syncFromSupabase() {
@@ -1938,12 +2082,16 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     setInterval(fetchAndApplySupabase, 2 * 60 * 1000);
   }
 
+  var _saveDebounceTimer = null;
   function saveData(){
     try{
       localStorage.setItem(STORE_KEY, JSON.stringify(state));
       localStorage.setItem('boussole_last_active', Date.now().toString());
     }catch(e){}
-    pushToSupabase(JSON.parse(JSON.stringify(state)));
+    clearTimeout(_saveDebounceTimer);
+    _saveDebounceTimer = setTimeout(function(){
+      pushToSupabase(JSON.parse(JSON.stringify(state)));
+    }, 1500);
   }
 
   // ============ ANNULATION APRÈS SUPPRESSION (filet de sécurité générique, partout dans l'app) ============
@@ -2038,7 +2186,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   document.getElementById('search-shortcut-btn').innerHTML = svgIcon('search', 17);
 
   // ============ TABS (deux niveaux : barre principale + menu "Plus") ============
-  var SECONDARY_VIEWS = ['year','goals','projects','finance','foundations','medical','help','sleep-tracking','tasks','week'];
+  var SECONDARY_VIEWS = ['year','goals','projects','finance','foundations','medical','help','sleep-tracking','tasks','week','locations'];
   var tabs = document.querySelectorAll('.tab');
   var moreItems = document.querySelectorAll('.more-item');
   var views = document.querySelectorAll('.view');
@@ -2064,6 +2212,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     if(viewName === 'projects') renderProjects();
     if(viewName === 'finance') renderFinance();
     if(viewName === 'now') renderNow();
+    if(viewName === 'locations') renderLocationsList();
   }
   tabs.forEach(function(tab){
     tab.addEventListener('click', function(){ switchToView(tab.dataset.view); });
@@ -3466,6 +3615,54 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     e.target.value = '';
   });
 
+  // ---- Code de synchronisation entre appareils personnels ----
+  (function(){
+    var displayEl = document.getElementById('sync-code-display');
+    var copyBtn   = document.getElementById('sync-code-copy-btn');
+    var pairInput = document.getElementById('sync-code-input');
+    var pairBtn   = document.getElementById('sync-code-pair-btn');
+    var statusEl  = document.getElementById('sync-code-status');
+    if(!displayEl || !copyBtn || !pairBtn) return;
+
+    function refreshDisplay(){
+      var code = getSyncCode();
+      if(code) displayEl.value = code;
+    }
+    refreshDisplay();
+    // Le code peut n'être généré qu'après le premier aller-retour réseau au chargement
+    setTimeout(refreshDisplay, 2000);
+
+    copyBtn.addEventListener('click', function(){
+      var code = getSyncCode();
+      if(!code){ statusEl.textContent = 'Code pas encore prêt, réessaie dans quelques secondes.'; return; }
+      displayEl.value = code;
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(code).then(function(){
+          statusEl.textContent = 'Code copié.';
+        }).catch(function(){
+          displayEl.select();
+          statusEl.textContent = 'Sélectionne et copie le code manuellement.';
+        });
+      } else {
+        displayEl.select();
+        statusEl.textContent = 'Sélectionne et copie le code manuellement.';
+      }
+    });
+
+    pairBtn.addEventListener('click', function(){
+      var code = pairInput.value;
+      if(!code.trim()){ statusEl.textContent = 'Colle un code avant de continuer.'; return; }
+      var ok = confirm('Lier cet appareil va remplacer TOUTES les données présentes ici par celles associées à ce code. Continuer ?');
+      if(!ok) return;
+      statusEl.textContent = 'Connexion en cours…';
+      pairWithSyncCode(code, function(err){
+        if(err){ statusEl.textContent = 'Code invalide ou expiré.'; return; }
+        statusEl.textContent = 'Appareil lié, récupération des données…';
+        fetchAndApplySupabase();
+      });
+    });
+  })();
+
   var EXPORT_REMINDER_THRESHOLD_MS = 30*60*1000; // 30 minutes, choisi explicitement par l'utilisateur
   function renderExportReminder(){
     var wrap = document.getElementById('export-reminder-wrap');
@@ -3543,7 +3740,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
       var isActive = p.id === assignedId;
       var color = PROFILE_COLORS[p.id] || '#888';
       return '<button class="week-type-chip'+(isActive?' active':'')+'" data-wppid="'+p.id+'" '+
-        'style="border-color:'+color+';'+(isActive?'background:'+color+';':'')+'">'+ p.icon+' '+p.name+'</button>';
+        'style="border-color:'+color+';'+(isActive?'background:'+color+';':'')+'">'+ escapeHtml(p.icon)+' '+escapeHtml(p.name)+'</button>';
     }).join('') + '<button class="week-type-chip" id="week-type-none" style="border-style:dashed;">✕ Aucun</button>';
 
     sel.querySelectorAll('[data-wppid]').forEach(function(btn){
@@ -3659,7 +3856,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
       var color = PROFILE_COLORS[p.id]||'#888';
       var isActive = p.id === yearAssignProfileId;
       return '<button class="week-type-chip'+(isActive?' active':'')+'" data-yppid="'+p.id+'" '+
-        'style="border-color:'+color+';'+(isActive?'background:'+color+';':'')+'">'+ p.icon+' '+p.name+'</button>';
+        'style="border-color:'+color+';'+(isActive?'background:'+color+';':'')+'">'+ escapeHtml(p.icon)+' '+escapeHtml(p.name)+'</button>';
     }).join('');
     sel.querySelectorAll('[data-yppid]').forEach(function(btn){
       btn.addEventListener('click', function(){
@@ -4204,14 +4401,14 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     var tabsEl=document.getElementById('profile-tabs');
     if(tabsEl){
       tabsEl.innerHTML=state.weekProfiles.map(function(p){
-        return '<button class="profile-tab'+(p.id===state.activeProfileId?' active':'')+'" data-pid="'+p.id+'">'+p.icon+' '+p.name+'</button>';
+        return '<button class="profile-tab'+(p.id===state.activeProfileId?' active':'')+'" data-pid="'+p.id+'">'+ escapeHtml(p.icon)+' '+escapeHtml(p.name)+'</button>';
       }).join('');
       tabsEl.querySelectorAll('.profile-tab').forEach(function(btn){
         btn.addEventListener('click',function(){state.activeProfileId=btn.dataset.pid;saveData();renderBalance();});
       });
     }
     var cfgBtn=document.getElementById('configure-profile-btn');
-    if(cfgBtn){ cfgBtn.innerHTML='⚙️ Configurer "'+profile.name+'"'; cfgBtn.onclick=function(){startWizard(profile);}; }
+    if(cfgBtn){ cfgBtn.innerHTML='⚙️ Configurer "'+escapeHtml(profile.name)+'"'; cfgBtn.onclick=function(){startWizard(profile);}; }
     var addBtn=document.getElementById('add-profile-btn');
     if(addBtn){ addBtn.onclick=function(){
       var name=prompt('Nom du nouveau profil :');if(!name)return;
@@ -6042,18 +6239,21 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   }
 
   // ---- Lazy script loader ----
-  function loadScript(url, cb){
+  function loadScript(url, integrity, cb){
     if(document.querySelector('script[src="'+url+'"]')){ cb(null); return; }
     var s=document.createElement('script');
-    s.src=url; s.onload=function(){cb(null);}; s.onerror=function(){cb(new Error('Échec chargement CDN'));};
+    s.src=url;
+    if(integrity){ s.integrity=integrity; s.crossOrigin='anonymous'; }
+    s.onload=function(){cb(null);}; s.onerror=function(){cb(new Error('Échec chargement CDN'));};
     document.head.appendChild(s);
   }
 
   // ---- PDF parsing ----
   var _PDFJS_URL='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  var _PDFJS_SRI='sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e';
   var _PDFJS_WORKER='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   function parsePDFFile(file, onDone){
-    loadScript(_PDFJS_URL, function(lerr){
+    loadScript(_PDFJS_URL, _PDFJS_SRI, function(lerr){
       if(lerr||typeof pdfjsLib==='undefined'){
         onDone(null,'Connexion internet requise pour lire les PDFs (bibliothèque PDF.js).');
         return;
@@ -6198,8 +6398,9 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
 
   // ---- Excel parsing (SheetJS — chargé à la demande) ----
   var _XLSX_URL='https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+  var _XLSX_SRI='sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT';
   function parseExcelFile(file, onDone){
-    loadScript(_XLSX_URL, function(lerr){
+    loadScript(_XLSX_URL, _XLSX_SRI, function(lerr){
       if(lerr||typeof XLSX==='undefined'){
         onDone(null,'Connexion internet requise pour lire les fichiers Excel (bibliothèque SheetJS).');
         return;
@@ -6484,7 +6685,29 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   var _geoPlaceHint  = document.getElementById('geo-place-hint');
   var _geoTimeHint   = document.getElementById('geo-time-hint');
   var _geoOpts          = { enableHighAccuracy: false, timeout: 10000, maximumAge: 30000 };
+  var _geoOptsTransit    = { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 };
   var _ongoingGeoBlockId = null; // ID du bloc géo actuellement "en cours" — étendu à chaque check GPS
+
+  // ---- Wake Lock : empêche l'écran de s'éteindre pendant un trajet actif détecté ----
+  // Ne fonctionne que tant que Boussole reste affichée à l'écran (aucune API web ne permet
+  // un suivi réel une fois l'app en arrière-plan ou l'appareil verrouillé).
+  var _wakeLock = null;
+  function acquireGeoWakeLock() {
+    if (!('wakeLock' in navigator) || _wakeLock || document.hidden) return;
+    navigator.wakeLock.request('screen').then(function(lock) {
+      _wakeLock = lock;
+      _wakeLock.addEventListener('release', function() { _wakeLock = null; updateWakeLockBadge(false); });
+      updateWakeLockBadge(true);
+    }).catch(function() {});
+  }
+  function releaseGeoWakeLock() {
+    if (_wakeLock) { _wakeLock.release().catch(function() {}); _wakeLock = null; }
+    updateWakeLockBadge(false);
+  }
+  function updateWakeLockBadge(active) {
+    var el = document.getElementById('geo-wakelock-badge');
+    if (el) el.style.display = active ? 'flex' : 'none';
+  }
 
   function saveGeoAnchor() {
     try { localStorage.setItem(GEO_ANCHOR_KEY, JSON.stringify({ anchorLat: _geo.anchorLat, anchorLng: _geo.anchorLng, anchorTime: _geo.anchorTime, promptedDate: _geo.prompted ? dateKey(new Date()) : '', ongoingBlockId: _ongoingGeoBlockId })); } catch(e) {}
@@ -6688,6 +6911,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
         _inTransit = true;
         _stableAtDest = 0;
         _transitStart = _geo.anchorTime || _prevPos.time; // heure de départ = fin du dernier séjour
+        acquireGeoWakeLock();
       }
 
       if (_inTransit) {
@@ -6698,6 +6922,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
             var trajetMin = Math.max(2, Math.round((now - _transitStart) / 60000));
             if (trajetMin <= 240) { createTrajetBlock(_transitStart, now, trajetMin); }
             _inTransit = false; _stableAtDest = 0;
+            releaseGeoWakeLock();
             _geo.anchorLat = lat; _geo.anchorLng = lng;
             _geo.anchorTime = now - 3 * 60000; // ancre posée ~3 min avant (moment d'arrêt réel)
             _geo.prompted = false;
@@ -6723,8 +6948,11 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
       _geo.anchorLat = lat; _geo.anchorLng = lng; _geo.anchorTime = now; _geo.prompted = false;
       saveGeoAnchor(); return;
     }
-    if (haversineM(lat, lng, _geo.anchorLat, _geo.anchorLng) > 1000) {
-      // Déplacement significatif sans transit détecté (ex: premier fix après longue absence)
+    if (haversineM(lat, lng, _geo.anchorLat, _geo.anchorLng) > 400) {
+      // Déplacement significatif sans transit rapide détecté (marche lente, ou trou de suivi
+      // pendant une mise en arrière-plan) : on ne considère plus être sur le lieu précédent,
+      // même si aucun "trajet" n'a été détecté entre-temps — sinon le bloc en cours continue
+      // de s'étirer indéfiniment (durée mise à jour dans _extendOngoingBlock()).
       _geo.anchorLat = lat; _geo.anchorLng = lng; _geo.anchorTime = now; _geo.prompted = false;
       _ongoingGeoBlockId = null;
       saveGeoAnchor(); return;
@@ -6742,7 +6970,8 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
 
   function geoCheck() {
     if (!navigator.geolocation || !state.geoTrackingEnabled) return;
-    navigator.geolocation.getCurrentPosition(onGeoPosition, function(){}, _geoOpts);
+    // Pendant un trajet en cours : plus fréquent et plus précis (meilleure précision sur début/fin de trajet)
+    navigator.geolocation.getCurrentPosition(onGeoPosition, function(){}, _inTransit ? _geoOptsTransit : _geoOpts);
   }
 
   function startLocationTracking() {
@@ -6750,12 +6979,191 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     loadGeoAnchor(); // restaurer l'ancre depuis localStorage
     _extendOngoingBlock(); // mise à jour immédiate à l'ouverture (sans attendre GPS)
     setTimeout(geoCheck, 5000);   // premier check rapide
-    setInterval(geoCheck, 60000); // puis toutes les minutes si app au premier plan
-    // Vérification immédiate à chaque retour au premier plan (slide-up → retour app)
+    // Boucle auto-ajustée : 60s au repos, 15s pendant un trajet détecté (au lieu d'un setInterval fixe)
+    (function scheduleNextCheck(){
+      setTimeout(function(){ geoCheck(); scheduleNextCheck(); }, _inTransit ? 15000 : 60000);
+    })();
+    // Rattrapage à chaque retour au premier plan (slide-up, changement d'onglet, restauration bfcache iOS)
+    function catchUpOnForeground(){
+      loadGeoAnchor();
+      setTimeout(geoCheck, 1000);
+      if (_inTransit) acquireGeoWakeLock(); // le Wake Lock se relâche automatiquement en arrière-plan, on le redemande au retour
+    }
     document.addEventListener('visibilitychange', function() {
-      if (!document.hidden) { loadGeoAnchor(); setTimeout(geoCheck, 1000); }
+      if (!document.hidden) catchUpOnForeground();
+    });
+    window.addEventListener('focus', catchUpOnForeground);
+    window.addEventListener('pageshow', catchUpOnForeground); // couvre le bfcache iOS Safari
+  }
+
+  // ============ MES LIEUX (pré-remplir les lieux fréquents à l'avance) ============
+  var LEAFLET_CSS_URL  = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
+  var LEAFLET_CSS_SRI  = 'sha512-h9FcoyWjHcOcmEVkxOfTLnmZFWIH0iZhZT1H2TbOq55xssQGEJHEaIm+PgoUaZbRvQTNTluNOEfb1ZRy6D3BOw==';
+  var LEAFLET_JS_URL   = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+  var LEAFLET_JS_SRI   = 'sha512-puJW3E/qXDqYp9IfhAI54BJEaWIfloJ7JWs7OeD5i6ruC9JZL1gERT1wjtwXFlh7CjE7ZJ+/vcRZRkIYIb6p4g==';
+  var LEAFLET_IMG_BASE = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/';
+
+  function loadStylesheet(url, integrity, cb){
+    if(document.querySelector('link[href="'+url+'"]')){ cb(null); return; }
+    var l = document.createElement('link');
+    l.rel = 'stylesheet'; l.href = url;
+    if(integrity){ l.integrity = integrity; l.crossOrigin = 'anonymous'; }
+    l.onload = function(){ cb(null); }; l.onerror = function(){ cb(new Error('Échec chargement CDN')); };
+    document.head.appendChild(l);
+  }
+
+  function loadLeaflet(cb){
+    if(typeof L !== 'undefined'){ cb(null); return; }
+    loadStylesheet(LEAFLET_CSS_URL, LEAFLET_CSS_SRI, function(){
+      loadScript(LEAFLET_JS_URL, LEAFLET_JS_SRI, function(jsErr){
+        if(jsErr || typeof L === 'undefined'){ cb(new Error('Connexion internet requise pour afficher la carte.')); return; }
+        L.Icon.Default.imagePath = LEAFLET_IMG_BASE;
+        cb(null);
+      });
     });
   }
+
+  var _locMap = null, _locMarker = null, _locPending = null; // _locPending = {lat,lng} en attente d'enregistrement
+
+  function renderLocationsList(){
+    var wrap = document.getElementById('locations-list');
+    if(!wrap) return;
+    var locs = state.knownLocations || [];
+    if(!locs.length){
+      wrap.innerHTML = '<div class="empty-state"><i class="ti ti-map-pin"></i><p>Aucun lieu enregistré pour l\'instant — ajoute ta maison, ton travail, ta salle de sport…</p></div>';
+      return;
+    }
+    wrap.innerHTML = locs.map(function(loc){
+      var col = pillarColor(loc.pillarId);
+      var label = pillarLabel(loc.pillarId);
+      return '<div class="goal-card" data-loccard="'+loc.id+'">'+
+        '<div class="goal-title-row">'+
+          '<div class="goal-title">'+escapeHtml(loc.name)+'</div>'+
+          '<span class="svg-icon-btn" data-editloc="'+loc.id+'">'+svgIcon('pencil',14)+'</span>'+
+        '</div>'+
+        '<div class="goal-meta">'+
+        (label ? '<span class="tag" style="color:'+col+';background:'+col+'22;">'+label+'</span>' : '') +
+        '<div class="item-del" data-delloc="'+loc.id+'" style="margin-left:auto;">'+svgIcon('trash',16)+'</div>'+
+        '</div></div>';
+    }).join('');
+
+    wrap.querySelectorAll('[data-delloc]').forEach(function(el){
+      el.addEventListener('click', function(e){
+        e.stopPropagation();
+        var loc = findItem(state.knownLocations, {id: el.dataset.delloc});
+        deleteWithUndo(function(){ return state.knownLocations; }, el.dataset.delloc, loc?loc.name:'lieu', [renderLocationsList]);
+      });
+    });
+    wrap.querySelectorAll('[data-editloc]').forEach(function(el){
+      el.addEventListener('click', function(){ openLocationForm(el.dataset.editloc); });
+    });
+  }
+
+  function placeLocationMarker(lat, lng){
+    _locPending = {lat: lat, lng: lng};
+    if(_locMarker){ _locMarker.setLatLng([lat, lng]); }
+    else {
+      _locMarker = L.marker([lat, lng], {draggable:true}).addTo(_locMap);
+      _locMarker.on('dragend', function(){ var p = _locMarker.getLatLng(); _locPending = {lat: p.lat, lng: p.lng}; });
+    }
+    _locMap.setView([lat, lng], Math.max(_locMap.getZoom(), 15));
+  }
+
+  function initLocationMap(initial){
+    var container = document.getElementById('location-map');
+    if(!container) return;
+    var startLat = initial ? initial.lat : 46.6034; // centre France par défaut si aucun lieu déjà connu
+    var startLng = initial ? initial.lng : 1.8883;
+    var startZoom = initial ? 15 : 5;
+
+    if(_locMap){ _locMap.remove(); _locMap = null; _locMarker = null; }
+    _locMap = L.map('location-map').setView([startLat, startLng], startZoom);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap'
+    }).addTo(_locMap);
+
+    if(initial) placeLocationMarker(initial.lat, initial.lng);
+
+    _locMap.on('click', function(e){ placeLocationMarker(e.latlng.lat, e.latlng.lng); });
+  }
+
+  function openLocationForm(locationId){
+    var card = document.getElementById('location-form-card');
+    var nameInput = document.getElementById('location-form-name');
+    var pillarSel = document.getElementById('location-form-pillar');
+    var idInput = document.getElementById('location-form-id');
+    var hint = document.getElementById('location-form-hint');
+    var existing = locationId ? findItem(state.knownLocations, {id: locationId}) : null;
+
+    idInput.value = existing ? existing.id : '';
+    nameInput.value = existing ? existing.name : '';
+    pillarSel.value = existing ? existing.pillarId : 'personnel';
+    _locPending = existing ? {lat: existing.lat, lng: existing.lng} : null;
+    hint.textContent = 'Recherche une adresse, utilise ta position actuelle, ou clique directement sur la carte pour placer le repère.';
+    card.style.display = 'block';
+    card.scrollIntoView({behavior:'smooth', block:'nearest'});
+
+    loadLeaflet(function(err){
+      if(err){ hint.textContent = err.message; return; }
+      initLocationMap(_locPending);
+    });
+  }
+
+  document.getElementById('add-location-btn').addEventListener('click', function(){ openLocationForm(null); });
+
+  document.getElementById('location-form-cancel').addEventListener('click', function(){
+    document.getElementById('location-form-card').style.display = 'none';
+  });
+
+  document.getElementById('location-use-current-btn').addEventListener('click', function(){
+    var hint = document.getElementById('location-form-hint');
+    if(!navigator.geolocation){ hint.textContent = 'Géolocalisation indisponible sur cet appareil.'; return; }
+    hint.textContent = 'Localisation en cours…';
+    navigator.geolocation.getCurrentPosition(function(pos){
+      placeLocationMarker(pos.coords.latitude, pos.coords.longitude);
+      hint.textContent = 'Position actuelle placée sur la carte.';
+    }, function(){
+      hint.textContent = 'Impossible de récupérer ta position.';
+    }, {enableHighAccuracy:true, timeout:10000, maximumAge:0});
+  });
+
+  document.getElementById('location-search-btn').addEventListener('click', function(){
+    var q = document.getElementById('location-search-input').value.trim();
+    var hint = document.getElementById('location-form-hint');
+    if(!q) return;
+    hint.textContent = 'Recherche…';
+    fetch('https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(q)+'&format=json&limit=1', {
+      headers: { 'Accept-Language': 'fr' }
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(results){
+      if(!results || !results.length){ hint.textContent = 'Aucune adresse trouvée.'; return; }
+      var r = results[0];
+      placeLocationMarker(parseFloat(r.lat), parseFloat(r.lon));
+      hint.textContent = 'Adresse trouvée : ' + r.display_name;
+    })
+    .catch(function(){ hint.textContent = 'Recherche impossible (connexion internet requise).'; });
+  });
+
+  document.getElementById('location-form-save').addEventListener('click', function(){
+    var name = document.getElementById('location-form-name').value.trim();
+    var pillar = document.getElementById('location-form-pillar').value;
+    var id = document.getElementById('location-form-id').value;
+    var hint = document.getElementById('location-form-hint');
+    if(!name){ document.getElementById('location-form-name').focus(); return; }
+    if(!_locPending){ hint.textContent = 'Place un repère sur la carte avant d\'enregistrer.'; return; }
+    if(!state.knownLocations) state.knownLocations = [];
+    if(id){
+      var existing = findItem(state.knownLocations, {id: id});
+      if(existing){ existing.name = name; existing.pillarId = pillar; existing.lat = _locPending.lat; existing.lng = _locPending.lng; }
+    } else {
+      state.knownLocations.push({ id: 'loc_'+Date.now(), name: name, lat: _locPending.lat, lng: _locPending.lng, pillarId: pillar });
+    }
+    saveData();
+    document.getElementById('location-form-card').style.display = 'none';
+    renderLocationsList();
+  });
 
   // ============ DÉTECTION SOMMEIL INTELLIGENTE ============
   function createSleepBlockFromDetection(sleepStartMs, wakeMs){
@@ -6805,8 +7213,9 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
       var gapMs = now - lastActive;
       var gapH = gapMs / 3600000;
       var nowHour = new Date().getHours();
-      // Critères : gap 3h–14h, heure actuelle avant 15h, pas déjà un bloc sommeil aujourd'hui
-      if(gapH < 3 || gapH > 14 || nowHour >= 15) return;
+      // Critères : gap 3h–14h, heure actuelle avant 22h (couvre aussi qui n'ouvre l'app que l'après-midi/soir),
+      // pas déjà un bloc sommeil aujourd'hui (garde alreadyHas ci-dessous, donc pas de doublon même en élargissant la fenêtre)
+      if(gapH < 3 || gapH > 14 || nowHour >= 22) return;
       var todayK = dateKey(new Date());
       var wakeDate = new Date(now);
       var alreadyHas = state.blocks.some(function(b){
@@ -6829,6 +7238,15 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
       document.getElementById('sleep-detect-close').onclick  = function(){ banner.style.display='none'; };
     }catch(e){}
   }
+
+  // Rattrapage indépendant du suivi géo (marche même si la géoloc est désactivée) : un onglet
+  // resté ouvert depuis la veille (bfcache iOS notamment) ne relance jamais le script au chargement,
+  // donc il faut aussi vérifier à chaque retour au premier plan.
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) checkSleepDetection();
+  });
+  window.addEventListener('focus', checkSleepDetection);
+  window.addEventListener('pageshow', checkSleepDetection);
 
   // ============ INIT ============
   // Démarrer sur Équilibre — c'est le coeur de l'application
