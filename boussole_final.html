@@ -1491,7 +1491,10 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
           <input type="checkbox" id="geo-save-check" checked> Mémoriser
         </label>
       </div>
-      <button class="btn primary" id="geo-confirm-btn" style="width:100%;justify-content:center;"><i class="ti ti-check"></i> Ajouter à l'agenda</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn ghost" id="geo-empty-btn" style="flex:1;justify-content:center;display:none;">❓ Inconnu / vide</button>
+        <button class="btn primary" id="geo-confirm-btn" style="flex:2;justify-content:center;"><i class="ti ti-check"></i> Ajouter à l'agenda</button>
+      </div>
     </div>
   </div>
 
@@ -6671,7 +6674,10 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   // ============ GÉOLOCALISATION ============
   var GEO_ANCHOR_KEY = 'boussole_geo_anchor';
   // Ancre persistée en localStorage pour survivre aux suspensions iOS
-  var _geo = { anchorLat: null, anchorLng: null, anchorTime: null, prompted: false };
+  var _geo = { anchorLat: null, anchorLng: null, anchorTime: null, prompted: false, lastConfirmedTime: null };
+  // Au-delà de ce trou entre deux positions GPS confirmées, on ne peut plus garantir que
+  // l'utilisateur est resté au même endroit — voir _fillLocationGap().
+  var GEO_GAP_THRESHOLD_MS = 25 * 60000;
   var _pendingGeoLat = null, _pendingGeoLng = null;
   var _geoBanner     = document.getElementById('geo-banner');
   // Machine d'état trajet
@@ -6684,6 +6690,9 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   var _geoSaveCheck  = document.getElementById('geo-save-check');
   var _geoPlaceHint  = document.getElementById('geo-place-hint');
   var _geoTimeHint   = document.getElementById('geo-time-hint');
+  var _geoEmptyBtn   = document.getElementById('geo-empty-btn');
+  var _geoModalMode  = 'live'; // 'live' = lieu détecté en direct · 'gap' = trou de suivi passé à qualifier
+  var _geoPendingGap = null;   // {start, end, suggestedPillar} en attente de réponse — voir _fillLocationGap()
   var _geoOpts          = { enableHighAccuracy: false, timeout: 10000, maximumAge: 30000 };
   var _geoOptsTransit    = { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 };
   var _ongoingGeoBlockId = null; // ID du bloc géo actuellement "en cours" — étendu à chaque check GPS
@@ -6710,13 +6719,18 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   }
 
   function saveGeoAnchor() {
-    try { localStorage.setItem(GEO_ANCHOR_KEY, JSON.stringify({ anchorLat: _geo.anchorLat, anchorLng: _geo.anchorLng, anchorTime: _geo.anchorTime, promptedDate: _geo.prompted ? dateKey(new Date()) : '', ongoingBlockId: _ongoingGeoBlockId })); } catch(e) {}
+    try { localStorage.setItem(GEO_ANCHOR_KEY, JSON.stringify({ anchorLat: _geo.anchorLat, anchorLng: _geo.anchorLng, anchorTime: _geo.anchorTime, promptedDate: _geo.prompted ? dateKey(new Date()) : '', ongoingBlockId: _ongoingGeoBlockId, lastConfirmedTime: _geo.lastConfirmedTime })); } catch(e) {}
   }
   function loadGeoAnchor() {
     try {
       var s = JSON.parse(localStorage.getItem(GEO_ANCHOR_KEY));
-      if (s && s.anchorLat) {
-        _geo.anchorLat = s.anchorLat; _geo.anchorLng = s.anchorLng; _geo.anchorTime = s.anchorTime;
+      // anchorLat peut être null juste après un trou de suivi comblé (_fillLocationGap) :
+      // ne pas se baser uniquement dessus pour savoir si un état a été persisté.
+      if (s && (s.anchorLat != null || s.lastConfirmedTime)) {
+        _geo.anchorLat = (s.anchorLat != null) ? s.anchorLat : null;
+        _geo.anchorLng = (s.anchorLng != null) ? s.anchorLng : null;
+        _geo.anchorTime = s.anchorTime;
+        _geo.lastConfirmedTime = s.lastConfirmedTime || null;
         _geo.prompted = (s.promptedDate === dateKey(new Date()));
         _ongoingGeoBlockId = s.ongoingBlockId || null;
         // Fallback : si prompted mais ID perdu (bloc créé avant cette version), chercher par heure d'ancre
@@ -6755,8 +6769,15 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     }
   }
 
-  // Étend la durée du bloc géo en cours jusqu'à maintenant (appelé à chaque check GPS et à l'ouverture)
+  // Étend la durée du bloc géo en cours jusqu'à la dernière position GPS confirmée
+  // (appelé à chaque check GPS et à l'ouverture). BUG FIX : on n'étend plus jusqu'à
+  // Date.now() — sinon un trou de suivi (app fermée/arrière-plan, aucune position reçue)
+  // était silencieusement compté comme "toujours sur place" jusqu'à la réouverture,
+  // même si l'utilisateur avait quitté le lieu entre-temps. On plafonne désormais à
+  // _geo.lastConfirmedTime, la dernière fois qu'une position a réellement été reçue ;
+  // le trou lui-même est qualifié séparément par _fillLocationGap() + le bandeau "gap".
   function _extendOngoingBlock() {
+    if (_geoPendingGap) return; // un trou est en attente de réponse : ne rien étirer avant qualification
     if (!_geo.prompted) return;
     if (!_ongoingGeoBlockId) { _findAndSetOngoingBlock(); }
     if (!_ongoingGeoBlockId) return;
@@ -6774,12 +6795,93 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
       ongoing.startMinute = wakeDate.getMinutes();
       bStartDate = wakeDate;
     }
-    var newDur = Math.round((Date.now() - bStartDate.getTime()) / 60000);
+    var extendUntil = _geo.lastConfirmedTime || Date.now();
+    if (extendUntil < bStartDate.getTime()) extendUntil = bStartDate.getTime();
+    var newDur = Math.round((extendUntil - bStartDate.getTime()) / 60000);
     if (newDur > ongoing.durationMinutes + 1) {
       ongoing.durationMinutes = newDur;
       saveData();
       if (!document.hidden) renderAgenda();
     }
+  }
+
+  // Détecte un trou de suivi (app fermée, arrière-plan, hors ligne) et, au lieu de laisser
+  // _extendOngoingBlock() attribuer silencieusement ce temps au dernier lieu connu, ouvre le
+  // bandeau géo en mode "gap" pour demander à l'utilisateur ce qu'il faut en faire (nom + pilier,
+  // ou "inconnu/vide"). Appelée à chaque position GPS reçue. Renvoie true si un trou vient
+  // d'être détecté (le reste du traitement de cette position est alors différé au prochain check).
+  function _fillLocationGap(now) {
+    var last = _geo.lastConfirmedTime;
+    if (!last || (now - last) < GEO_GAP_THRESHOLD_MS) {
+      _geo.lastConfirmedTime = now;
+      saveGeoAnchor();
+      return false;
+    }
+    // Récupérer le bloc en cours AVANT de l'étirer, pour pré-remplir le bandeau avec son nom/pilier
+    var closedBlock = _ongoingGeoBlockId ? findItem(state.blocks, {id: _ongoingGeoBlockId}) : null;
+    var suggestedName = closedBlock ? closedBlock.title : '';
+    var suggestedPillar = closedBlock ? closedBlock.pillarId : 'personnel';
+    // Clôturer le bloc en cours à la dernière confirmation réelle (AVANT d'écraser
+    // lastConfirmedTime, sinon _extendOngoingBlock() étirerait jusqu'à maintenant et on
+    // retomberait dans le bug initial du bloc étiré silencieusement)
+    _extendOngoingBlock();
+    _geo.lastConfirmedTime = now;
+    _ongoingGeoBlockId = null;
+    saveGeoAnchor();
+
+    _geoPendingGap = { start: last, end: now, suggestedPillar: suggestedPillar };
+    var gapStart = new Date(last);
+    var gapMin = Math.round((now - last) / 60000);
+    var gapH = Math.floor(gapMin / 60), gapM = gapMin % 60;
+    var gapLabel = (gapH ? gapH + 'h ' : '') + gapM + 'min';
+    openGeoModal(null, null, suggestedName, {
+      mode: 'gap',
+      hint: 'Position inconnue de ' + pad2(gapStart.getHours()) + 'h' + pad2(gapStart.getMinutes()) + ' à maintenant (' + gapLabel + ')'
+    });
+    sendNotif('❓ Position inconnue', 'Aucune localisation depuis ' + pad2(gapStart.getHours()) + 'h' + pad2(gapStart.getMinutes()) + ' (' + gapLabel + '). Où étais-tu ?');
+    return true;
+  }
+
+  // Crée le bloc rétroactif correspondant au trou de suivi une fois qualifié par l'utilisateur
+  // (nom + pilier confirmés, ou "inconnu/vide" — voir les handlers de geo-confirm-btn/geo-empty-btn).
+  function createGapBlock(name, pillar) {
+    if (!_geoPendingGap) return;
+    var startDate = new Date(_geoPendingGap.start);
+    var durMin = Math.max(1, Math.round((_geoPendingGap.end - _geoPendingGap.start) / 60000));
+    state.blocks.push({
+      id: 'b_geogap_' + Date.now(),
+      pillarId: pillar, title: name,
+      date: dateKey(startDate), endDate: null,
+      startHour: startDate.getHours(), startMinute: startDate.getMinutes(),
+      durationMinutes: durMin, goalId: null, isSleepBlock: false, isLunchBlock: false,
+      notes: 'Confirmé rétroactivement après un trou de suivi de localisation.'
+    });
+    saveData();
+    if (!document.hidden) renderAgenda();
+  }
+
+  // Résout le trou en attente sans nom précis : pose un bloc neutre "Position inconnue" qui
+  // occupe quand même le créneau (pour ne jamais laisser un trou vide dans la journée), puis
+  // libère la détection en direct pour le prochain check GPS.
+  function resolveGapAsUnknown() {
+    if (_geoPendingGap) {
+      var startDate = new Date(_geoPendingGap.start);
+      var durMin = Math.max(1, Math.round((_geoPendingGap.end - _geoPendingGap.start) / 60000));
+      state.blocks.push({
+        id: 'b_geogap_' + Date.now(),
+        pillarId: 'personnel',
+        title: '❓ Position inconnue',
+        date: dateKey(startDate), endDate: null,
+        startHour: startDate.getHours(), startMinute: startDate.getMinutes(),
+        durationMinutes: durMin, goalId: null, isSleepBlock: false, isLunchBlock: false,
+        notes: 'Aucun signal de localisation pendant cette période (app fermée ou hors ligne).'
+      });
+      saveData();
+      if (!document.hidden) renderAgenda();
+    }
+    _geoPendingGap = null;
+    _geo.prompted = false; // libère la détection en direct : la position actuelle sera redemandée au prochain check
+    saveGeoAnchor();
   }
 
   function haversineM(lat1, lng1, lat2, lng2) {
@@ -6839,15 +6941,35 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   }
 
   // ---- Modal ----
-  function openGeoModal(lat, lng, suggestedName) {
+  // opts.mode: 'live' (défaut) = lieu détecté en direct, crée un bloc depuis l'ancre jusqu'à
+  // maintenant. 'gap' = trou de suivi passé à qualifier (voir _fillLocationGap) : le champ
+  // pilier est pré-rempli avec celui du bloc précédent et le bouton "Inconnu/vide" apparaît.
+  function openGeoModal(lat, lng, suggestedName, opts) {
+    opts = opts || {};
+    _geoModalMode = opts.mode === 'gap' ? 'gap' : 'live';
     _pendingGeoLat = lat; _pendingGeoLng = lng;
     _geoNameInput.value = suggestedName || '';
-    _geoPlaceHint.textContent = suggestedName ? 'Lieu détecté : ' + suggestedName : 'Lieu inconnu';
-    _geoTimeHint.textContent = 'Depuis ' + (Math.round((Date.now() - _geo.anchorTime) / 60000)) + ' min · ' + geoPlageLabel();
+    // Toujours réafficher les champs normaux : onGeoError() les masque pour l'alerte
+    // "permission refusée", qui réutilise ce même bandeau.
+    _geoNameInput.style.display = '';
+    _geoPillarSel.style.display = '';
+    document.getElementById('geo-confirm-btn').style.display = '';
+    if (_geoModalMode === 'gap') {
+      _geoPlaceHint.textContent = 'Trou de localisation';
+      _geoTimeHint.textContent = opts.hint || '';
+      _geoEmptyBtn.style.display = '';
+      _geoSaveCheck.parentElement.style.display = 'none'; // pas de coordonnées connues pour ce trou → rien à mémoriser
+      if (_geoPendingGap && _geoPendingGap.suggestedPillar) _geoPillarSel.value = _geoPendingGap.suggestedPillar;
+    } else {
+      _geoPlaceHint.textContent = suggestedName ? 'Lieu détecté : ' + suggestedName : 'Lieu inconnu';
+      _geoTimeHint.textContent = 'Depuis ' + (Math.round((Date.now() - _geo.anchorTime) / 60000)) + ' min · ' + geoPlageLabel();
+      _geoEmptyBtn.style.display = 'none';
+      _geoSaveCheck.parentElement.style.display = '';
+      _geo.prompted = true;
+      saveGeoAnchor();
+      sendNotif('📍 Nouveau lieu détecté', suggestedName || 'Tu es là depuis ' + Math.round((Date.now()-_geo.anchorTime)/60000) + ' min. Ouvre Boussole pour ajouter.');
+    }
     _geoBanner.style.display = 'block';
-    _geo.prompted = true;
-    saveGeoAnchor();
-    sendNotif('📍 Nouveau lieu détecté', suggestedName || 'Tu es là depuis ' + Math.round((Date.now()-_geo.anchorTime)/60000) + ' min. Ouvre Boussole pour ajouter.');
   }
 
   function closeGeoModal() { _geoBanner.style.display = 'none'; }
@@ -6856,6 +6978,14 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     var name = _geoNameInput.value.trim();
     if (!name) { _geoNameInput.focus(); return; }
     var pillar = _geoPillarSel.value;
+    if (_geoModalMode === 'gap') {
+      createGapBlock(name, pillar);
+      _geoPendingGap = null;
+      _geo.prompted = false; // libère la détection en direct : la position actuelle sera redemandée au prochain check
+      saveGeoAnchor();
+      closeGeoModal();
+      return;
+    }
     if (_geoSaveCheck.checked && _pendingGeoLat !== null) {
       if (!state.knownLocations) state.knownLocations = [];
       var existing = findKnownLocation(_pendingGeoLat, _pendingGeoLng);
@@ -6865,7 +6995,16 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     createGeoBlock(name, pillar);
     closeGeoModal();
   });
-  document.getElementById('geo-cancel-btn').addEventListener('click', closeGeoModal);
+  document.getElementById('geo-empty-btn').addEventListener('click', function() {
+    resolveGapAsUnknown();
+    closeGeoModal();
+  });
+  document.getElementById('geo-cancel-btn').addEventListener('click', function() {
+    // En mode "gap", fermer sans répondre ne doit pas laisser un trou silencieux dans la
+    // journée : on résout comme "inconnu" (voir demande explicite : toujours remplir 24h/24h).
+    if (_geoModalMode === 'gap') { resolveGapAsUnknown(); }
+    closeGeoModal();
+  });
 
   // ---- Geocodage inverse ----
   function reverseGeocode(lat, lng, cb) {
@@ -6900,6 +7039,16 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   function onGeoPosition(pos) {
     var lat = pos.coords.latitude, lng = pos.coords.longitude;
     var now = Date.now();
+
+    // Un trou est en attente de réponse dans le bandeau : ne rien évaluer de plus tant que
+    // l'utilisateur n'a pas qualifié la période (sinon on risquerait de rouvrir un second
+    // bandeau "lieu détecté" par-dessus, ou de ré-étirer le bloc déjà clôturé).
+    if (_geoPendingGap) return;
+
+    // Détecter un trou de suivi (app fermée/arrière-plan) avant de traiter cette position :
+    // si un trou vient d'être détecté, le bandeau "gap" s'ouvre et le reste de cette position
+    // (trajet, ancre, extension) sera réévalué au prochain check GPS une fois répondu.
+    if (_fillLocationGap(now)) return;
 
     // --- Détection de trajet : >300m en ≤5 min = déplacement motorisé/vélo ---
     if (_prevPos !== null) {
@@ -6968,16 +7117,46 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     _extendOngoingBlock();
   }
 
+  var _geoErrorShownDate = null; // n'afficher le bandeau d'erreur qu'une fois par jour, pas à chaque check
+  function onGeoError(err) {
+    // BUG FIX : avant ce correctif, TOUTE erreur GPS (permission refusée, position
+    // indisponible, timeout) était totalement silencieuse — aucune trace, aucun signal.
+    // Si la permission de localisation a été révoquée (fréquent sur iPhone après un moment,
+    // ou en mode Batterie basse), plus rien ne pouvait jamais s'exécuter, et ce sans que
+    // rien ne le laisse deviner : aucune notification, aucun bandeau, aucune détection.
+    try { console.warn('[Boussole geo] erreur de géolocalisation', err && err.code, err && err.message); } catch(e) {}
+    if (err && err.code === 1 /* PERMISSION_DENIED */) {
+      var todayK = dateKey(new Date());
+      if (_geoErrorShownDate === todayK) return;
+      _geoErrorShownDate = todayK;
+      _geoPlaceHint.textContent = '🚫 Localisation refusée';
+      _geoTimeHint.textContent = "Boussole n'a plus accès à ta position. Vérifie Réglages → Confidentialité → Localisation (ou Réglages → Safari → Boussole) et autorise l'accès.";
+      _geoModalMode = 'live';
+      _geoEmptyBtn.style.display = 'none';
+      _geoSaveCheck.parentElement.style.display = 'none';
+      _geoNameInput.style.display = 'none';
+      document.getElementById('geo-pillar-select').style.display = 'none';
+      document.getElementById('geo-confirm-btn').style.display = 'none';
+      _geoBanner.style.display = 'block';
+      sendNotif('🚫 Localisation refusée', "Boussole n'a plus accès à ta position — vérifie les réglages de l'app.");
+    }
+  }
+
   function geoCheck() {
     if (!navigator.geolocation || !state.geoTrackingEnabled) return;
     // Pendant un trajet en cours : plus fréquent et plus précis (meilleure précision sur début/fin de trajet)
-    navigator.geolocation.getCurrentPosition(onGeoPosition, function(){}, _inTransit ? _geoOptsTransit : _geoOpts);
+    navigator.geolocation.getCurrentPosition(onGeoPosition, onGeoError, _inTransit ? _geoOptsTransit : _geoOpts);
   }
 
   function startLocationTracking() {
     if (!navigator.geolocation || !state.geoTrackingEnabled) return;
-    loadGeoAnchor(); // restaurer l'ancre depuis localStorage
-    _extendOngoingBlock(); // mise à jour immédiate à l'ouverture (sans attendre GPS)
+    // BUG FIX : chaque étape est isolée dans son propre try/catch. Avant ce correctif, une
+    // exception non interceptée ici (ex: bloc en cours corrompu) arrêtait tout le reste de
+    // l'IIFE d'init — y compris requestNotifPermission() et le premier checkSleepDetection()
+    // appelés juste après startLocationTracking() en bas du fichier — d'où les prompts de
+    // localisation ET de sommeil qui cessaient tous les deux en même temps.
+    try { loadGeoAnchor(); } catch(e) {} // restaurer l'ancre depuis localStorage
+    try { _extendOngoingBlock(); } catch(e) {} // mise à jour immédiate à l'ouverture (sans attendre GPS)
     setTimeout(geoCheck, 5000);   // premier check rapide
     // Boucle auto-ajustée : 60s au repos, 15s pendant un trajet détecté (au lieu d'un setInterval fixe)
     (function scheduleNextCheck(){
@@ -6985,7 +7164,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     })();
     // Rattrapage à chaque retour au premier plan (slide-up, changement d'onglet, restauration bfcache iOS)
     function catchUpOnForeground(){
-      loadGeoAnchor();
+      try { loadGeoAnchor(); } catch(e) {}
       setTimeout(geoCheck, 1000);
       if (_inTransit) acquireGeoWakeLock(); // le Wake Lock se relâche automatiquement en arrière-plan, on le redemande au retour
     }
@@ -7254,9 +7433,12 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   renderExportReminder();
   applyCustomization();
   setInterval(renderExportReminder, 60*1000);
-  startLocationTracking();
+  // Chaque étape est isolée : avant ce correctif, une exception dans startLocationTracking()
+  // empêchait requestNotifPermission() et ce premier checkSleepDetection() de s'exécuter,
+  // ce qui coupait silencieusement les deux détections en même temps.
+  try { startLocationTracking(); } catch(e) {}
   requestNotifPermission();
-  checkSleepDetection();
+  try { checkSleepDetection(); } catch(e) {}
 })();
 
 </script>

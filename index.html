@@ -905,7 +905,10 @@
           <input type="checkbox" id="geo-save-check" checked> Mémoriser
         </label>
       </div>
-      <button class="btn primary" id="geo-confirm-btn" style="width:100%;justify-content:center;"><i class="ti ti-check"></i> Ajouter à l'agenda</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn ghost" id="geo-empty-btn" style="flex:1;justify-content:center;display:none;">❓ Inconnu / vide</button>
+        <button class="btn primary" id="geo-confirm-btn" style="flex:2;justify-content:center;"><i class="ti ti-check"></i> Ajouter à l'agenda</button>
+      </div>
     </div>
   </div>
 
