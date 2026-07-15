@@ -1469,6 +1469,9 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     <i class="ti ti-lock" style="color:#6EBF8B;"></i> Écran maintenu allumé le temps du trajet
   </div>
 
+  <!-- Badge de diagnostic géoloc temporaire — à retirer une fois le bug résolu -->
+  <div id="geo-debug-badge" style="position:fixed; bottom:6px; left:6px; z-index:9997; max-width:92vw; background:rgba(17,19,24,0.9); border:1px solid var(--card-border); border-radius:6px; padding:4px 7px; font-size:10px; line-height:1.4; color:var(--ink-dim); font-family:monospace; white-space:pre-wrap; pointer-events:none;">geo: init…</div>
+
   <div id="geo-banner" style="display:none; position:fixed; top:0; left:0; right:0; z-index:9999; background:var(--bg-raised); border-bottom:2px solid #6EBF8B; padding:14px 16px; box-shadow:0 6px 24px rgba(0,0,0,0.6);">
     <div style="max-width:480px;margin:0 auto;">
       <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;">
@@ -7039,6 +7042,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   function onGeoPosition(pos) {
     var lat = pos.coords.latitude, lng = pos.coords.longitude;
     var now = Date.now();
+    _geoDebug('position reçue (' + lat.toFixed(4) + ',' + lng.toFixed(4) + ')' + (_geoPendingGap ? ' [gap en attente]' : ''));
 
     // Un trou est en attente de réponse dans le bandeau : ne rien évaluer de plus tant que
     // l'utilisateur n'a pas qualifié la période (sinon on risquerait de rouvrir un second
@@ -7125,6 +7129,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     // ou en mode Batterie basse), plus rien ne pouvait jamais s'exécuter, et ce sans que
     // rien ne le laisse deviner : aucune notification, aucun bandeau, aucune détection.
     try { console.warn('[Boussole geo] erreur de géolocalisation', err && err.code, err && err.message); } catch(e) {}
+    _geoDebug('ERREUR code=' + (err && err.code) + ' ' + (err && err.message || ''));
     if (err && err.code === 1 /* PERMISSION_DENIED */) {
       var todayK = dateKey(new Date());
       if (_geoErrorShownDate === todayK) return;
@@ -7142,14 +7147,37 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     }
   }
 
+  // Badge de diagnostic temporaire — affiche en direct où en est le suivi géo, pour
+  // identifier le blocage sans avoir besoin des outils de dev sur téléphone. À retirer
+  // une fois le bug de localisation confirmé résolu.
+  function _geoDebug(text) {
+    try {
+      var el = document.getElementById('geo-debug-badge');
+      if (el) el.textContent = 'geo: ' + text + ' · ' + pad2(new Date().getHours()) + ':' + pad2(new Date().getMinutes()) + ':' + pad2(new Date().getSeconds());
+    } catch(e) {}
+  }
+
   function geoCheck() {
-    if (!navigator.geolocation || !state.geoTrackingEnabled) return;
+    if (!navigator.geolocation) { _geoDebug('API navigator.geolocation absente'); return; }
+    if (!state.geoTrackingEnabled) { _geoDebug('geoTrackingEnabled=false'); return; }
+    _geoDebug('appel getCurrentPosition…');
     // Pendant un trajet en cours : plus fréquent et plus précis (meilleure précision sur début/fin de trajet)
     navigator.geolocation.getCurrentPosition(onGeoPosition, onGeoError, _inTransit ? _geoOptsTransit : _geoOpts);
   }
 
   function startLocationTracking() {
-    if (!navigator.geolocation || !state.geoTrackingEnabled) return;
+    if (!navigator.geolocation) { _geoDebug('API navigator.geolocation absente'); return; }
+    if (!state.geoTrackingEnabled) { _geoDebug('geoTrackingEnabled=false'); return; }
+    _geoDebug('startLocationTracking() lancé');
+    try {
+      if (navigator.permissions && navigator.permissions.query) {
+        navigator.permissions.query({name:'geolocation'}).then(function(p){
+          _geoDebug('permission geoloc = ' + p.state);
+        }).catch(function(){});
+      } else {
+        _geoDebug('API navigator.permissions indisponible (normal sur Safari)');
+      }
+    } catch(e) {}
     // BUG FIX : chaque étape est isolée dans son propre try/catch. Avant ce correctif, une
     // exception non interceptée ici (ex: bloc en cours corrompu) arrêtait tout le reste de
     // l'IIFE d'init — y compris requestNotifPermission() et le premier checkSleepDetection()

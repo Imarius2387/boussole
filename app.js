@@ -5490,6 +5490,7 @@
   function onGeoPosition(pos) {
     var lat = pos.coords.latitude, lng = pos.coords.longitude;
     var now = Date.now();
+    _geoDebug('position reçue (' + lat.toFixed(4) + ',' + lng.toFixed(4) + ')' + (_geoPendingGap ? ' [gap en attente]' : ''));
 
     // Un trou est en attente de réponse dans le bandeau : ne rien évaluer de plus tant que
     // l'utilisateur n'a pas qualifié la période (sinon on risquerait de rouvrir un second
@@ -5576,6 +5577,7 @@
     // ou en mode Batterie basse), plus rien ne pouvait jamais s'exécuter, et ce sans que
     // rien ne le laisse deviner : aucune notification, aucun bandeau, aucune détection.
     try { console.warn('[Boussole geo] erreur de géolocalisation', err && err.code, err && err.message); } catch(e) {}
+    _geoDebug('ERREUR code=' + (err && err.code) + ' ' + (err && err.message || ''));
     if (err && err.code === 1 /* PERMISSION_DENIED */) {
       var todayK = dateKey(new Date());
       if (_geoErrorShownDate === todayK) return;
@@ -5593,14 +5595,37 @@
     }
   }
 
+  // Badge de diagnostic temporaire — affiche en direct où en est le suivi géo, pour
+  // identifier le blocage sans avoir besoin des outils de dev sur téléphone. À retirer
+  // une fois le bug de localisation confirmé résolu.
+  function _geoDebug(text) {
+    try {
+      var el = document.getElementById('geo-debug-badge');
+      if (el) el.textContent = 'geo: ' + text + ' · ' + pad2(new Date().getHours()) + ':' + pad2(new Date().getMinutes()) + ':' + pad2(new Date().getSeconds());
+    } catch(e) {}
+  }
+
   function geoCheck() {
-    if (!navigator.geolocation || !state.geoTrackingEnabled) return;
+    if (!navigator.geolocation) { _geoDebug('API navigator.geolocation absente'); return; }
+    if (!state.geoTrackingEnabled) { _geoDebug('geoTrackingEnabled=false'); return; }
+    _geoDebug('appel getCurrentPosition…');
     // Pendant un trajet en cours : plus fréquent et plus précis (meilleure précision sur début/fin de trajet)
     navigator.geolocation.getCurrentPosition(onGeoPosition, onGeoError, _inTransit ? _geoOptsTransit : _geoOpts);
   }
 
   function startLocationTracking() {
-    if (!navigator.geolocation || !state.geoTrackingEnabled) return;
+    if (!navigator.geolocation) { _geoDebug('API navigator.geolocation absente'); return; }
+    if (!state.geoTrackingEnabled) { _geoDebug('geoTrackingEnabled=false'); return; }
+    _geoDebug('startLocationTracking() lancé');
+    try {
+      if (navigator.permissions && navigator.permissions.query) {
+        navigator.permissions.query({name:'geolocation'}).then(function(p){
+          _geoDebug('permission geoloc = ' + p.state);
+        }).catch(function(){});
+      } else {
+        _geoDebug('API navigator.permissions indisponible (normal sur Safari)');
+      }
+    } catch(e) {}
     // BUG FIX : chaque étape est isolée dans son propre try/catch. Avant ce correctif, une
     // exception non interceptée ici (ex: bloc en cours corrompu) arrêtait tout le reste de
     // l'IIFE d'init — y compris requestNotifPermission() et le premier checkSleepDetection()
