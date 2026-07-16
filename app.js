@@ -5506,6 +5506,7 @@
     if (_prevPos !== null) {
       var moveDist = haversineM(lat, lng, _prevPos.lat, _prevPos.lng);
       var moveMinutes = (now - _prevPos.time) / 60000;
+      _geoDebug('vs prevPos: ' + Math.round(moveDist) + 'm en ' + moveMinutes.toFixed(1) + 'min, précision=' + Math.round(pos.coords.accuracy || -1) + 'm, transit=' + _inTransit);
 
       if (!_inTransit && moveDist > 300 && moveMinutes <= 5) {
         // Départ rapide détecté → passage en mode transit
@@ -5546,23 +5547,29 @@
 
     // --- Logique d'ancre classique ---
     if (_geo.anchorLat === null) {
+      _geoDebug('nouvelle ancre posée (aucune ancre précédente)');
       _geo.anchorLat = lat; _geo.anchorLng = lng; _geo.anchorTime = now; _geo.prompted = false;
       saveGeoAnchor(); return;
     }
-    if (haversineM(lat, lng, _geo.anchorLat, _geo.anchorLng) > 400) {
+    var distFromAnchor = haversineM(lat, lng, _geo.anchorLat, _geo.anchorLng);
+    if (distFromAnchor > 400) {
       // Déplacement significatif sans transit rapide détecté (marche lente, ou trou de suivi
       // pendant une mise en arrière-plan) : on ne considère plus être sur le lieu précédent,
       // même si aucun "trajet" n'a été détecté entre-temps — sinon le bloc en cours continue
       // de s'étirer indéfiniment (durée mise à jour dans _extendOngoingBlock()).
+      _geoDebug('ancre RÉINITIALISÉE : ' + Math.round(distFromAnchor) + 'm > 400m (précision=' + Math.round(pos.coords.accuracy || -1) + 'm)');
       _geo.anchorLat = lat; _geo.anchorLng = lng; _geo.anchorTime = now; _geo.prompted = false;
       _ongoingGeoBlockId = null;
       saveGeoAnchor(); return;
     }
     // Même zone — vérifier les 5 minutes de stabilité
-    if ((now - _geo.anchorTime) >= 5 * 60 * 1000 && !_geo.prompted) {
+    var secSinceAnchor = Math.round((now - _geo.anchorTime) / 1000);
+    _geoDebug('même zone (' + Math.round(distFromAnchor) + 'm), ancre depuis ' + secSinceAnchor + 's, prompted=' + _geo.prompted);
+    if (secSinceAnchor >= 5 * 60 && !_geo.prompted) {
+      _geoDebug('seuil 5min atteint → recherche du lieu…');
       var known = findKnownLocation(lat, lng);
-      if (known) { createGeoBlock(known.name, known.pillarId); }
-      else { reverseGeocode(lat, lng, function(name) { openGeoModal(lat, lng, name); }); }
+      if (known) { _geoDebug('lieu connu: ' + known.name); createGeoBlock(known.name, known.pillarId); }
+      else { reverseGeocode(lat, lng, function(name) { _geoDebug('reverseGeocode → openGeoModal(' + (name||'?') + ')'); openGeoModal(lat, lng, name); }); }
     }
 
     // Mise à jour live : étendre le bloc géo en cours
@@ -5598,10 +5605,14 @@
   // Badge de diagnostic temporaire — affiche en direct où en est le suivi géo, pour
   // identifier le blocage sans avoir besoin des outils de dev sur téléphone. À retirer
   // une fois le bug de localisation confirmé résolu.
+  var _geoDebugLines = [];
   function _geoDebug(text) {
     try {
+      var stamp = pad2(new Date().getHours()) + ':' + pad2(new Date().getMinutes()) + ':' + pad2(new Date().getSeconds());
+      _geoDebugLines.push(stamp + ' ' + text);
+      if (_geoDebugLines.length > 6) _geoDebugLines.shift();
       var el = document.getElementById('geo-debug-badge');
-      if (el) el.textContent = 'geo: ' + text + ' · ' + pad2(new Date().getHours()) + ':' + pad2(new Date().getMinutes()) + ':' + pad2(new Date().getSeconds());
+      if (el) el.textContent = _geoDebugLines.join('\n');
     } catch(e) {}
   }
 
