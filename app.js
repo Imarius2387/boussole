@@ -5490,7 +5490,6 @@
   function onGeoPosition(pos) {
     var lat = pos.coords.latitude, lng = pos.coords.longitude;
     var now = Date.now();
-    _geoDebug('position reçue (' + lat.toFixed(4) + ',' + lng.toFixed(4) + ')' + (_geoPendingGap ? ' [gap en attente]' : ''));
 
     // Un trou est en attente de réponse dans le bandeau : ne rien évaluer de plus tant que
     // l'utilisateur n'a pas qualifié la période (sinon on risquerait de rouvrir un second
@@ -5506,7 +5505,6 @@
     if (_prevPos !== null) {
       var moveDist = haversineM(lat, lng, _prevPos.lat, _prevPos.lng);
       var moveMinutes = (now - _prevPos.time) / 60000;
-      _geoDebug('vs prevPos: ' + Math.round(moveDist) + 'm en ' + moveMinutes.toFixed(1) + 'min, précision=' + Math.round(pos.coords.accuracy || -1) + 'm, transit=' + _inTransit);
 
       if (!_inTransit && moveDist > 300 && moveMinutes <= 5) {
         // Départ rapide détecté → passage en mode transit
@@ -5547,7 +5545,6 @@
 
     // --- Logique d'ancre classique ---
     if (_geo.anchorLat === null) {
-      _geoDebug('nouvelle ancre posée (aucune ancre précédente)');
       _geo.anchorLat = lat; _geo.anchorLng = lng; _geo.anchorTime = now; _geo.prompted = false;
       saveGeoAnchor(); return;
     }
@@ -5557,19 +5554,16 @@
       // pendant une mise en arrière-plan) : on ne considère plus être sur le lieu précédent,
       // même si aucun "trajet" n'a été détecté entre-temps — sinon le bloc en cours continue
       // de s'étirer indéfiniment (durée mise à jour dans _extendOngoingBlock()).
-      _geoDebug('ancre RÉINITIALISÉE : ' + Math.round(distFromAnchor) + 'm > 400m (précision=' + Math.round(pos.coords.accuracy || -1) + 'm)');
       _geo.anchorLat = lat; _geo.anchorLng = lng; _geo.anchorTime = now; _geo.prompted = false;
       _ongoingGeoBlockId = null;
       saveGeoAnchor(); return;
     }
     // Même zone — vérifier les 5 minutes de stabilité
     var secSinceAnchor = Math.round((now - _geo.anchorTime) / 1000);
-    _geoDebug('même zone (' + Math.round(distFromAnchor) + 'm), ancre depuis ' + secSinceAnchor + 's, prompted=' + _geo.prompted);
     if (secSinceAnchor >= 5 * 60 && !_geo.prompted) {
-      _geoDebug('seuil 5min atteint → recherche du lieu…');
       var known = findKnownLocation(lat, lng);
-      if (known) { _geoDebug('lieu connu: ' + known.name); createGeoBlock(known.name, known.pillarId); }
-      else { reverseGeocode(lat, lng, function(name) { _geoDebug('reverseGeocode → openGeoModal(' + (name||'?') + ')'); openGeoModal(lat, lng, name); }); }
+      if (known) { createGeoBlock(known.name, known.pillarId); }
+      else { reverseGeocode(lat, lng, function(name) { openGeoModal(lat, lng, name); }); }
     }
 
     // Mise à jour live : étendre le bloc géo en cours
@@ -5584,7 +5578,6 @@
     // ou en mode Batterie basse), plus rien ne pouvait jamais s'exécuter, et ce sans que
     // rien ne le laisse deviner : aucune notification, aucun bandeau, aucune détection.
     try { console.warn('[Boussole geo] erreur de géolocalisation', err && err.code, err && err.message); } catch(e) {}
-    _geoDebug('ERREUR code=' + (err && err.code) + ' ' + (err && err.message || ''));
     if (err && err.code === 1 /* PERMISSION_DENIED */) {
       var todayK = dateKey(new Date());
       if (_geoErrorShownDate === todayK) return;
@@ -5602,41 +5595,14 @@
     }
   }
 
-  // Badge de diagnostic temporaire — affiche en direct où en est le suivi géo, pour
-  // identifier le blocage sans avoir besoin des outils de dev sur téléphone. À retirer
-  // une fois le bug de localisation confirmé résolu.
-  var _geoDebugLines = [];
-  function _geoDebug(text) {
-    try {
-      var stamp = pad2(new Date().getHours()) + ':' + pad2(new Date().getMinutes()) + ':' + pad2(new Date().getSeconds());
-      _geoDebugLines.push(stamp + ' ' + text);
-      if (_geoDebugLines.length > 6) _geoDebugLines.shift();
-      var el = document.getElementById('geo-debug-badge');
-      if (el) el.textContent = _geoDebugLines.join('\n');
-    } catch(e) {}
-  }
-
   function geoCheck() {
-    if (!navigator.geolocation) { _geoDebug('API navigator.geolocation absente'); return; }
-    if (!state.geoTrackingEnabled) { _geoDebug('geoTrackingEnabled=false'); return; }
-    _geoDebug('appel getCurrentPosition…');
+    if (!navigator.geolocation || !state.geoTrackingEnabled) return;
     // Pendant un trajet en cours : plus fréquent et plus précis (meilleure précision sur début/fin de trajet)
     navigator.geolocation.getCurrentPosition(onGeoPosition, onGeoError, _inTransit ? _geoOptsTransit : _geoOpts);
   }
 
   function startLocationTracking() {
-    if (!navigator.geolocation) { _geoDebug('API navigator.geolocation absente'); return; }
-    if (!state.geoTrackingEnabled) { _geoDebug('geoTrackingEnabled=false'); return; }
-    _geoDebug('startLocationTracking() lancé');
-    try {
-      if (navigator.permissions && navigator.permissions.query) {
-        navigator.permissions.query({name:'geolocation'}).then(function(p){
-          _geoDebug('permission geoloc = ' + p.state);
-        }).catch(function(){});
-      } else {
-        _geoDebug('API navigator.permissions indisponible (normal sur Safari)');
-      }
-    } catch(e) {}
+    if (!navigator.geolocation || !state.geoTrackingEnabled) return;
     // BUG FIX : chaque étape est isolée dans son propre try/catch. Avant ce correctif, une
     // exception non interceptée ici (ex: bloc en cours corrompu) arrêtait tout le reste de
     // l'IIFE d'init — y compris requestNotifPermission() et le premier checkSleepDetection()
