@@ -126,6 +126,7 @@ finance        — Finances
 foundations    — Fondations
 medical        — Suivi santé
 sleep-tracking — Suivi sommeil
+locations      — Mes lieux (géolocalisation, section géo de CLAUDE.md)
 help           — Aide
 ```
 

@@ -248,15 +248,11 @@
   .block-title{font-size:12.5px;font-weight:500;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .block-sub{font-size:10.5px;opacity:0.85;margin-top:1px;}
 
-  .agenda-recurring-row{display:flex;flex-wrap:wrap;gap:6px;padding:12px;background:var(--bg-raised);border-radius:14px;border:1px solid var(--line-soft);margin-bottom:10px;}
-  .recurring-chip{display:flex;align-items:center;gap:4px;padding:6px 10px;border-radius:8px;border:1.5px solid;font-size:12px;font-weight:500;background:var(--bg-input);transition:background 0.15s;}
-  .recurring-chip.done{opacity:0.9;}
   .drag-handle{display:flex;align-items:center;margin-left:6px;cursor:grab;touch-action:none;opacity:0.6;padding:2px;}
   .drag-handle:active{cursor:grabbing;}
   .drag-ghost{position:fixed;z-index:9999;pointer-events:none;background:var(--bg-raised);border:1.5px solid;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,0.4);opacity:0.95;}
   .hour-slot.drop-target{background:var(--accent-dim);outline:2px dashed var(--accent);outline-offset:-2px;}
 
-  .recurring-list{margin-top:0;}
   .rec-item{display:flex;align-items:center;gap:10px;padding:11px 12px;background:var(--bg-raised);border:1px solid var(--line-soft);border-radius:10px;margin-bottom:6px;}
   .rec-check{width:18px;height:18px;border-radius:5px;border:1.5px solid var(--ink-faint);flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;}
   .rec-check.checked{background:var(--calm);border-color:var(--calm);color:#0F1A0E;}
@@ -517,13 +513,6 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   .sleep-collapse[open] summary::after{transform:rotate(90deg);}
   .sleep-collapse[open]>div{padding:0 14px 14px;}
 
-  .recurring-collapse{margin-bottom:14px;border:1px solid var(--line-soft);border-radius:12px;padding:0 14px;background:var(--bg-raised);}
-  .recurring-collapse summary{font-size:13px;color:var(--ink-dim);cursor:pointer;list-style:none;display:flex;align-items:center;gap:6px;font-weight:500;padding:12px 0;}
-  .recurring-collapse summary::-webkit-details-marker{display:none;}
-  .recurring-collapse summary::before{content:'▸ ';color:var(--ink-faint);}
-  .recurring-collapse[open] summary::before{content:'▾ ';}
-  .recurring-collapse[open]{padding-bottom:14px;}
-
   .appt-card{background:var(--bg-raised);border:1px solid var(--line-soft);border-radius:12px;padding:13px 15px;margin-bottom:8px;}
   .appt-card-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
   .appt-specialty{font-size:13.5px;font-weight:500;}
@@ -775,6 +764,28 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
           <button class="btn primary" id="block-save-btn" style="flex:1;justify-content:center;"><i class="ti ti-check"></i> Enregistrer</button>
           <button class="btn" id="block-delete-btn" style="display:none;gap:5px;"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l16 0"/><path d="M10 11l0 6"/><path d="M14 11l0 6"/><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"/><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"/></svg> Supprimer</button>
           <button class="btn ghost" id="block-cancel-btn">Annuler</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="block-modal-backdrop" id="routine-modal-backdrop" style="display:none;">
+      <div class="block-modal">
+        <p class="section-title" style="margin-bottom:14px;">Nouvelle routine</p>
+        <input type="text" class="found-input" id="routine-text-input" placeholder="Texte de la routine (ex : boire un verre d'eau)">
+        <div class="goal-form-row" style="margin-top:8px;">
+          <div style="flex:1;">
+            <label class="found-label" style="font-size:11px;margin-bottom:4px;">Fréquence</label>
+            <div style="display:flex;gap:4px;">
+              <input type="number" class="found-input" id="routine-freq-count" min="1" step="1" value="1" style="flex:1;">
+              <select class="found-input" id="routine-freq-unit" style="max-width:100px;">
+                <option value="day">jour</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="goal-form-row" style="margin-top:14px;">
+          <button class="btn primary" id="routine-save-btn" style="flex:1;justify-content:center;"><i class="ti ti-check"></i> Enregistrer</button>
+          <button class="btn ghost" id="routine-cancel-btn">Annuler</button>
         </div>
       </div>
     </div>
@@ -1087,6 +1098,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
         <button class="task-urg-btn active" data-urg="week">📆 Semaine</button>
         <button class="task-urg-btn" data-urg="month">📊 Mois</button>
         <button class="task-urg-btn" data-urg="custom">📍 Date…</button>
+        <button class="task-urg-btn" data-urg="note">📝 Note</button>
       </div>
       <div id="task-time-row" style="display:none;margin-top:8px;display:none;">
         <span style="font-size:12px;color:var(--ink-faint);">Heure limite (optionnel) :</span>
@@ -1113,7 +1125,9 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
         <button class="btn primary sm" id="task-add-btn"><i class="ti ti-plus"></i></button>
       </div>
     </div>
+    <button class="btn ghost sm" id="add-routine-btn" style="width:100%;justify-content:center;margin-bottom:16px;"><i class="ti ti-plus"></i> Ajouter une routine</button>
     <div id="tasks-list"></div>
+    <div id="routines-section"></div>
   </div>
 
   <!-- ONBOARDING MODAL -->
@@ -1153,7 +1167,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
       <div id="profile-tabs" style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;scrollbar-width:none;"></div>
 
       <!-- Deux camemberts -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;">
         <div style="background:var(--bg-raised);border:1px solid var(--card-border);border-radius:var(--radius);padding:12px;">
           <p style="font-size:10px;color:var(--ink-faint);text-align:center;margin:0 0 8px;text-transform:uppercase;letter-spacing:0.06em;">Ma semaine idéale</p>
           <svg id="pie-ideal" width="110" height="110" viewBox="0 0 120 120" style="display:block;margin:0 auto;"></svg>
@@ -1165,9 +1179,13 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
           <div id="pie-real-legend" style="margin-top:8px;display:flex;flex-direction:column;gap:3px;"></div>
         </div>
       </div>
+      <p id="reference-week-note" style="font-size:11px;color:var(--ink-faint);text-align:center;margin:0 0 12px;"></p>
 
-      <!-- Bouton configurer -->
-      <button class="btn sm" id="configure-profile-btn" style="width:100%;justify-content:center;margin-bottom:12px;"><i class="ti ti-settings"></i> Configurer ce profil</button>
+      <!-- Boutons configurer -->
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <button class="btn sm" id="configure-profile-btn" style="flex:1;justify-content:center;"><i class="ti ti-settings"></i> Configurer</button>
+        <button class="btn sm" id="reference-week-btn" style="flex:1;justify-content:center;"><i class="ti ti-calendar-stats"></i> Semaine de référence</button>
+      </div>
 
       <!-- Écarts -->
       <div id="balance-gaps" style="background:var(--bg-raised);border:1px solid var(--card-border);border-radius:var(--radius);padding:14px;margin-bottom:12px;"></div>
@@ -1469,9 +1487,6 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     <i class="ti ti-lock" style="color:#6EBF8B;"></i> Écran maintenu allumé le temps du trajet
   </div>
 
-  <!-- Badge de diagnostic géoloc temporaire — à retirer une fois le bug résolu -->
-  <div id="geo-debug-badge" style="position:fixed; bottom:6px; left:6px; z-index:9997; max-width:92vw; background:rgba(17,19,24,0.9); border:1px solid var(--card-border); border-radius:6px; padding:4px 7px; font-size:10px; line-height:1.4; color:var(--ink-dim); font-family:monospace; white-space:pre-wrap; pointer-events:none;">geo: init…</div>
-
   <div id="geo-banner" style="display:none; position:fixed; top:0; left:0; right:0; z-index:9999; background:var(--bg-raised); border-bottom:2px solid #6EBF8B; padding:14px 16px; box-shadow:0 6px 24px rgba(0,0,0,0.6);">
     <div style="max-width:480px;margin:0 auto;">
       <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;">
@@ -1524,6 +1539,21 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
       <div id="sleep-night-duration" style="text-align:center;font-size:13px;color:var(--ink-faint);margin-bottom:14px;padding:8px;background:var(--bg-input);border-radius:var(--radius-sm);">Durée : —</div>
       <button class="btn primary full" id="sleep-night-save" style="justify-content:center;"><i class="ti ti-check"></i> Poser dans l'agenda</button>
       <button class="btn ghost full" id="sleep-night-remove" style="justify-content:center;margin-top:8px;display:none;">Effacer la nuit</button>
+    </div>
+  </div>
+
+  <div id="modal-reference-week" class="fixed-modal-backdrop" style="display:none;">
+    <div class="modal-card" style="max-width:380px;width:100%;max-height:80vh;overflow-y:auto;">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">
+        <div style="font-weight:600;font-size:15px;color:var(--ink);">Semaine de référence</div>
+        <button id="reference-week-close" class="btn ghost sm">✕</button>
+      </div>
+      <p class="found-hint" style="margin:0 0 12px;">Choisis une semaine passée qui représente bien ce profil — sa répartition réelle par pilier devient ton idéal, à la place d'un chiffre inventé.</p>
+      <div id="reference-week-current" style="display:none;margin-bottom:12px;padding:10px;background:var(--accent-dim);border:1px solid var(--accent);border-radius:var(--radius-sm);">
+        <div style="font-size:12.5px;color:var(--ink);margin-bottom:8px;" id="reference-week-current-label"></div>
+        <button class="btn ghost sm" id="reference-week-clear">Revenir à la configuration manuelle</button>
+      </div>
+      <div id="reference-week-list"></div>
     </div>
   </div>
 
@@ -1595,6 +1625,9 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     arr.forEach(function(item){ out[item[key]] = (out[item[key]]||0) + 1; });
     return out;
   }
+  function generateId(prefix){
+    return prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+  }
 
   // ============ DEFINITIONS ============
   var PILLAR_DEFS = [
@@ -1608,11 +1641,6 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
       subcats:[{id:'sport',label:'Sport / muscu'},{id:'sante',label:'Santé / alimentation'},{id:'culture',label:'Culture / lecture'},{id:'createur',label:'Création (musique, livre, photo)'},{id:'logistique',label:'Logistique perso'}]},
   ];
   var SLOTS_BASE_START = 6*60; // début par défaut de la grille (6h00), étiré plus tôt seulement si un bloc l'exige (ex: fin de nuit qui se termine avant 6h)
-  // Mémorise si le volet des routines est ouvert ou fermé PENDANT la session en cours (jamais persisté en
-  // localStorage : à chaque ouverture/rechargement de l'app, le volet redémarre fermé par défaut). Sans
-  // ça, chaque renderAgenda() (déclenché par exemple en cochant une routine) régénère le <details> sans
-  // son attribut "open" et referme le volet sous les yeux de l'utilisateur, ce qui serait très gênant.
-  var recurringPanelOpen = false;
   var SLOTS_BASE_END = 23*60+30; // limite par défaut de la grille (23h30), étirée seulement si un bloc l'exige
   // Calcule les créneaux de 30 min à afficher pour un jour donné : de 6h00 à 23h30 normalement, mais
   // étirée si nécessaire dans les deux sens — vers le haut si un bloc tardif (typiquement un coucher)
@@ -1804,6 +1832,12 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
 
   // ============ STORAGE ============
   var STORE_KEY = 'boussole_v1_data';
+  // Nombre de visites confirmées à partir duquel un lieu connu est "de confiance" et déclenche
+  // la création automatique d'un bloc agenda (sinon, retour au flux de confirmation habituel).
+  // Placée ici (avant loadData(), pas dans la zone géoloc plus bas) car la migration de
+  // loadData() en a besoin dès l'ouverture — une déclaration plus bas dans le fichier serait
+  // encore à 'undefined' au moment où loadData() s'exécute (var hoisté, pas sa valeur).
+  var TRUSTED_VISIT_THRESHOLD = 5;
   function defaultState(){
     return {
       tasks: [],
@@ -1824,6 +1858,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
       lastExportAt: null,         // timestamp du dernier export de sauvegarde réussi, pour le rappel discret
       customization: { quote: '', backgroundImage: null }, // backgroundImage : data URL base64, compressée à l'upload, ou null
       sleepTargetMinutes: 480, // 8h par défaut, réglable par l'utilisateur dans le suivi sommeil
+      activityTargetMinutes: 150, // objectif hebdomadaire d'activité physique, réglable dans Suivi santé
       sleepQualityLog: {},    // { 'YYYY-MM-DD': qualityRating (1-5) } — date du réveil, ressenti noté manuellement, optionnel
       weekNotes: {},          // { 'YYYY-MM-DD': 'texte libre' } — résumé narratif d'une journée dans la vue Semaine
       journal: {},            // { 'YYYY-MM-DD': { text: '', photoDataUrl: null } } — journal quotidien
@@ -1884,6 +1919,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     if(!result.activityLog) result.activityLog = [];
     if(!result.customization) result.customization = { quote:'', backgroundImage:null };
     if(typeof result.sleepTargetMinutes === 'undefined') result.sleepTargetMinutes = 480;
+    if(typeof result.activityTargetMinutes === 'undefined') result.activityTargetMinutes = 150;
     if(!result.sleepQualityLog) result.sleepQualityLog = {};
     if(!result.weekNotes) result.weekNotes = {};
     if(!result.journal) result.journal = {};
@@ -1891,6 +1927,8 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     if(!result.weekTypeAssignments) result.weekTypeAssignments = {};
     if(!result.weekProfiles) result.weekProfiles = [];
     if(!result.tasks) result.tasks = [];
+    if(!result.recurring) result.recurring = [];
+    if(!result.recurringLog) result.recurringLog = {};
     if(!result.knownLocations) result.knownLocations = [];
     if(typeof result.geoTrackingEnabled === 'undefined') result.geoTrackingEnabled = true;
     // Purge des anciens goals "court" terme : ils appartiennent désormais au système Tasks,
@@ -1942,6 +1980,17 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
       if(typeof pr.notes !== 'string') pr.notes='';
       if(typeof pr.links !== 'string') pr.links='';
       if(!pr.status) pr.status='todo';
+    });
+    // MIGRATION 1 — knownLocations sans visitCount -> TRUSTED_VISIT_THRESHOLD, pas 0 : ces lieux
+    // sont déjà utilisés/fiables aujourd'hui (créés avant l'existence du seuil de confiance),
+    // il ne faut pas les faire retomber soudainement dans le flux de confirmation.
+    if(result.knownLocations) result.knownLocations.forEach(function(loc){
+      if(typeof loc.visitCount !== 'number') loc.visitCount = TRUSTED_VISIT_THRESHOLD;
+    });
+    // MIGRATION 2 — recurring sans frequency -> {count:1, unit:'day'} (comportement quotidien implicite
+    // déjà en vigueur avant l'existence de ce champ, donc pas un changement de comportement observable)
+    result.recurring.forEach(function(r){
+      if(!r.frequency) r.frequency = {count:1, unit:'day'};
     });
     return result;
   }
@@ -2151,6 +2200,14 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   function pad2(n){ return n<10 ? '0'+n : ''+n; }
   function dateKey(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
   var todayKey = dateKey(new Date());
+  // Point d'entrée unique pour la clé de "jour routine" : avant 6h, rattachée à la veille (une routine
+  // cochée à 1h du matin compte pour la journée en cours, pas pour le nouveau jour civil). Jamais
+  // recalculée inline ailleurs.
+  function routineDayKey(date) {
+    var d = new Date(date);
+    if (d.getHours() < 6) d.setDate(d.getDate() - 1);
+    return dateKey(d);
+  }
 
   function escapeHtml(s){ var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
@@ -2277,7 +2334,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   }
   captureInput.addEventListener('input', updateCapturePreview);
 
-  function addTask(text){
+  function quickCaptureAdd(text){
     text = (text||'').trim();
     if(!text) return;
     var det = detectPillar(text);
@@ -2299,7 +2356,6 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
       saveData(); captureInput.value=''; capturePillarOverride=null;
       capturePreview.style.display='none';
       renderNow();
-      if(document.getElementById('view-list').classList.contains('active')) renderList();
     } else if(dayOffset!==null){
       // Un jour précis est cité (demain, après-demain, un jour de semaine...) mais sans heure ni période
       // (matin/soir) : on demande l'heure plutôt que de deviner ou de laisser filer en tâche sans date.
@@ -2308,18 +2364,19 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
       // Ressemble à un objectif plutôt qu'à une tâche concrète : on demande à préciser avant de classer.
       openGoalClarifyModal(text, chosenPillar);
     } else {
+      var grp=state.tasks.filter(function(t){return t.urgency==='week'&&t.status!=='done';});
+      var maxP=grp.reduce(function(m,t){return Math.max(m,t.priority!==undefined?t.priority:0);},- 1);
       state.tasks.push({
         id:'t'+Date.now()+Math.floor(Math.random()*1000),
-        text:text, importance:null, effort:null, pillar:chosenPillar,
-        done:false, doneAt:null, createdAt:Date.now()
+        text:text, urgency:'week', status:'todo', pillarId:chosenPillar,
+        deadline:null, durationMinutes:null, priority:maxP+1, doneAt:null, createdAt:new Date().toISOString()
       });
       saveData(); captureInput.value=''; capturePillarOverride=null;
       capturePreview.style.display='none';
       renderNow();
-      if(document.getElementById('view-list').classList.contains('active')) renderList();
     }
   }
-  sendBtn.addEventListener('click', function(){ addTask(captureInput.value); });
+  sendBtn.addEventListener('click', function(){ quickCaptureAdd(captureInput.value); });
 
   // ---- Modale de précision : la capture ressemble à un objectif sans date/heure ----
   var goalClarifyBackdrop = document.getElementById('goal-clarify-backdrop');
@@ -2423,7 +2480,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     if(document.getElementById('view-list').classList.contains('active')) renderList();
   });
 
-  captureInput.addEventListener('keydown', function(e){ if(e.key==='Enter') addTask(captureInput.value); });
+  captureInput.addEventListener('keydown', function(e){ if(e.key==='Enter') quickCaptureAdd(captureInput.value); });
 
   // ============ PERSONNALISATION VISUELLE (citation + image de fond, sur toute l'app) ============
   var PERSONALIZE_MAX_IMAGE_DIMENSION = 1280; // px, suffisant pour un fond d'écran, évite les photos brutes de plusieurs Mo
@@ -2809,12 +2866,12 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     var PILLAR_COLORS = {professionnel:'#7B77D4',personnel:'#6EBF8B',familial:'#F59E0B',social:'#EC4899'};
     var PILLAR_LABELS = {professionnel:'Pro',personnel:'Perso',familial:'Famille',social:'Social'};
     var pillars = ['professionnel','personnel','familial','social'];
-    var ideal = state.allocations || {};
-    var realResult = computeRealSplit();
-    var realSplit = realResult ? realResult.split : {};
-    var alignScore = realResult ? computeAlignmentScore(ideal, realSplit) : null;
-    var healthScore = 70;
-    var boussolScore = alignScore !== null ? Math.round(0.6*alignScore + 0.4*healthScore) : null;
+    var scoreResult = computeBoussoleScore();
+    var ideal = scoreResult.ideal;
+    var realResult = scoreResult.realResult;
+    var realSplit = scoreResult.real;
+    var alignScore = scoreResult.alignScore;
+    var boussolScore = scoreResult.boussolScore;
 
     // Couleur du score
     var scoreColor = boussolScore===null ? 'var(--ink-faint)' : boussolScore>=75 ? 'var(--accent)' : boussolScore>=50 ? '#F59E0B' : '#E53E3E';
@@ -2944,23 +3001,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   // à deux tuiles (Tâches / Objectifs), plus clair et mieux structuré.
   function renderList(){ renderHub(); }
 
-  // ============ RENDER: TODAY (recurring + agenda) ============
-  function renderRecurring(){
-    // La liste détaillée des routines a été remplacée par des puces directement dans l'agenda (renderAgenda).
-    // Cette fonction ne gère plus que la simple présence du bouton d'ajout ; rien à faire ici si la liste séparée n'existe plus.
-  }
-
-  var recurringForm = document.getElementById('recurring-form');
-  var recurringInput = document.getElementById('recurring-input');
-  var addRecurringBtn = document.getElementById('add-recurring-btn');
-  if(addRecurringBtn) addRecurringBtn.addEventListener('click', function(){
-    if(recurringForm){ recurringForm.style.display = 'block'; }
-    if(recurringInput){ recurringInput.value=''; recurringInput.focus(); }
-  });
-  var cancelRecurringBtn = document.getElementById('recurring-cancel-btn');
-  if(cancelRecurringBtn) cancelRecurringBtn.addEventListener('click', function(){
-    if(recurringForm) recurringForm.style.display = 'none';
-  });
+  // ============ RENDER: TODAY (agenda) ============
 
   // Pose un bloc "Déjeuner" dans l'agenda du jour visé.
   var lunchBtn = document.getElementById('lunch-add-to-agenda-btn');
@@ -2986,19 +3027,6 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     setTimeout(function(){ lunchBtn.textContent = 'Poser dans l\'agenda d\'aujourd\'hui'; }, 2000);
   });
 
-  function saveRecurringFromForm(){
-    if(!recurringInput) return;
-    var text = recurringInput.value.trim();
-    if(!text) return;
-    var det = detectPillar(text);
-    state.recurring.push({id:'r'+Date.now()+Math.floor(Math.random()*1000), text:text, pillarId: det.pillar || 'personnel', type:'libre'});
-    saveData();
-    if(recurringForm) recurringForm.style.display='none';
-    renderAgenda();
-  }
-  var saveRecurringBtn = document.getElementById('recurring-save-btn');
-  if(saveRecurringBtn) saveRecurringBtn.addEventListener('click', saveRecurringFromForm);
-  if(recurringInput) recurringInput.addEventListener('keydown', function(e){ if(e.key==='Enter') saveRecurringFromForm(); });
 
   // ---- Day navigation state ----
   var viewedDate = new Date(); // the day currently shown in the agenda
@@ -3040,8 +3068,6 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     var _renderNow = new Date();
     var _isToday = (key === dateKey(_renderNow));
     var _nowMin = _renderNow.getHours()*60 + _renderNow.getMinutes();
-
-    var recurringHtml = ''; // routines retirées de la vue Aujourd'hui — gèrent dans le menu Plus si besoin
 
     var occupiedUntil = -1; // minutes jusqu'où la grille est déjà couverte par le bloc le plus long en cours d'affichage
     function renderHourSlot(startMin){
@@ -3205,37 +3231,8 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
         '</div>';
     }).join('');
 
-    grid.innerHTML = recurringHtml + slotsHtml;
+    grid.innerHTML = slotsHtml;
 
-    var recurringDetails = grid.querySelector('.recurring-collapse');
-    if(recurringDetails){
-      recurringDetails.addEventListener('toggle', function(){
-        recurringPanelOpen = recurringDetails.open;
-      });
-    }
-
-    grid.querySelectorAll('[data-recid]').forEach(function(span){
-      span.addEventListener('click', function(){
-        var log = state.recurringLog[key] || [];
-        var idx = log.indexOf(span.dataset.recid);
-        if(idx===-1) log.push(span.dataset.recid); else log.splice(idx,1);
-        state.recurringLog[key] = log;
-        saveData(); renderAgenda();
-      });
-    });
-    grid.querySelectorAll('[data-delrec]').forEach(function(x){
-      x.addEventListener('click', function(e){
-        e.stopPropagation();
-        var r = findItem(state.recurring, {id:x.dataset.delrec});
-        deleteWithUndo(function(){ return state.recurring; }, x.dataset.delrec, r?r.text:'routine', [renderAgenda]);
-      });
-    });
-    grid.querySelectorAll('[data-editrec]').forEach(function(pencil){
-      pencil.addEventListener('click', function(e){
-        e.stopPropagation();
-        openRecurringEditor(pencil.dataset.editrec);
-      });
-    });
     grid.querySelectorAll('.hour-slot').forEach(function(slot){
       slot.addEventListener('click', function(e){
         if(e.target.closest('.block')) return;
@@ -3281,30 +3278,17 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
         startBlockDrag(e, {type:'block', id:handle.dataset.blockdraghandle}, grid);
       });
     });
-
-    grid.querySelectorAll('[data-draghandle]').forEach(function(handle){
-      handle.addEventListener('pointerdown', function(e){
-        startBlockDrag(e, {type:'recurring', id:handle.dataset.draghandle}, grid);
-      });
-    });
     if(typeof loadJournal === 'function') loadJournal();
   }
 
-  // ---- Drag and drop tactile/souris : routine -> nouveau bloc, ou bloc existant -> nouveau créneau ----
+  // ---- Drag and drop tactile/souris : bloc existant -> nouveau créneau ----
   var dragGhost = null, dragActive = false;
 
   function startBlockDrag(e, source, grid){
     e.preventDefault();
-    var label, col;
-    if(source.type==='recurring'){
-      var r = findItem(state.recurring, {id:source.id});
-      if(!r) return;
-      label = r.text; col = pillarColor(r.pillarId||'personnel');
-    } else {
-      var b = findItem(state.blocks, {id:source.id});
-      if(!b) return;
-      label = b.title; col = pillarColor(b.pillarId);
-    }
+    var b = findItem(state.blocks, {id:source.id});
+    if(!b) return;
+    var label = b.title, col = pillarColor(b.pillarId);
     dragActive = true;
 
     dragGhost = document.createElement('div');
@@ -3330,8 +3314,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
       if(dragGhost){ dragGhost.remove(); dragGhost = null; }
       if(targetSlot){
         var startMin = parseInt(targetSlot.dataset.startmin);
-        if(source.type==='recurring') dropRecurringOnSlot(source.id, startMin);
-        else moveBlockToSlot(source.id, startMin);
+        moveBlockToSlot(source.id, startMin);
       }
     }
     document.addEventListener('pointermove', onMove);
@@ -3370,103 +3353,6 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     saveData(); renderAgenda(); renderYear();
   }
 
-  function dropRecurringOnSlot(recId, startMin){
-    var r = findItem(state.recurring, {id:recId});
-    if(!r) return;
-    state.blocks.push({
-      id:'b'+Date.now()+Math.floor(Math.random()*1000),
-      pillarId: r.pillarId||'personnel', title: r.text,
-      date: viewedKey(), endDate: null,
-      startHour: Math.floor(startMin/60), startMinute: startMin%60,
-      durationMinutes: 30, goalId: null, fromRecurring: r.id
-    });
-    saveData(); renderAgenda(); renderYear();
-  }
-
-  function openRecurringEditor(recId){
-    var r = findItem(state.recurring, {id:recId});
-    if(!r) return;
-    var zone = document.getElementById('recurring-edit-zone');
-    if(!zone) return;
-    var type = r.type || 'libre';
-    var fixedH = r.timeFixed ? pad2(r.timeFixed.h) : '08';
-    var fixedM = r.timeFixed ? pad2(r.timeFixed.m) : '00';
-    var anchorVal = r.anchorEvent || 'wake';
-    var durVal = r.durationMinutes || 30;
-    zone.innerHTML =
-      '<div class="inline-form" style="margin-top:8px;">'+
-        '<input type="text" class="found-input" id="edit-rec-text" value="'+escapeHtml(r.text)+'">'+
-        '<div class="goal-form-row" style="margin-top:8px;">'+
-          '<select class="found-input" id="edit-rec-pillar" style="flex:1;">'+pillarOptionsHtml(r.pillarId)+'</select>'+
-        '</div>'+
-        '<div style="margin-top:10px;">'+
-          '<label class="found-label" style="margin-bottom:6px;">Quand ?</label>'+
-          '<select class="found-input" id="edit-rec-type">'+
-            '<option value="libre"'+(type==='libre'?' selected':'')+'>Libre — aucune heure, à cocher quand je veux</option>'+
-            '<option value="fixe"'+(type==='fixe'?' selected':'')+'>Heure fixe — toujours la même heure</option>'+
-            '<option value="ancré"'+(type==='ancré'?' selected':'')+'>Ancrée à un événement — se décale avec lui</option>'+
-          '</select>'+
-        '</div>'+
-        '<div id="edit-rec-type-fields" style="margin-top:10px;"></div>'+
-        '<div class="goal-form-row" style="margin-top:10px;">'+
-          '<button class="btn primary" id="edit-rec-save" style="flex:1;justify-content:center;"><i class="ti ti-check"></i> Enregistrer</button>'+
-          '<button class="btn ghost" id="edit-rec-cancel">Annuler</button>'+
-        '</div>'+
-      '</div>';
-
-    function renderTypeFields(selectedType){
-      var fieldsWrap = document.getElementById('edit-rec-type-fields');
-      if(selectedType==='fixe'){
-        fieldsWrap.innerHTML =
-          '<label class="found-label" style="margin-bottom:6px;">Heure fixe</label>'+
-          '<input type="time" class="found-input" id="edit-rec-fixed-time" value="'+fixedH+':'+fixedM+'">'+
-          '<label class="found-label" style="margin:10px 0 6px;">Durée (minutes)</label>'+
-          '<input type="number" class="found-input" id="edit-rec-duration" value="'+durVal+'" min="5" step="5">';
-      } else if(selectedType==='ancré'){
-        fieldsWrap.innerHTML =
-          '<label class="found-label" style="margin-bottom:6px;">Ancrée à</label>'+
-          '<select class="found-input" id="edit-rec-anchor">'+
-            '<option value="wake"'+(anchorVal==='wake'?' selected':'')+'>Réveil</option>'+
-            '<option value="after_lunch"'+(anchorVal==='after_lunch'?' selected':'')+'>Après déjeuner</option>'+
-            '<option value="before_sleep"'+(anchorVal==='before_sleep'?' selected':'')+'>Avant le coucher</option>'+
-          '</select>'+
-          '<label class="found-label" style="margin:10px 0 6px;">Durée (minutes)</label>'+
-          '<input type="number" class="found-input" id="edit-rec-duration" value="'+durVal+'" min="5" step="5">';
-      } else {
-        fieldsWrap.innerHTML = '';
-      }
-    }
-    renderTypeFields(type);
-    document.getElementById('edit-rec-type').addEventListener('change', function(e){
-      renderTypeFields(e.target.value);
-    });
-
-    document.getElementById('edit-rec-save').addEventListener('click', function(){
-      var newText = document.getElementById('edit-rec-text').value.trim();
-      if(newText) r.text = newText;
-      r.pillarId = document.getElementById('edit-rec-pillar').value;
-      var newType = document.getElementById('edit-rec-type').value;
-      r.type = newType;
-      if(newType==='fixe'){
-        var timeVal = document.getElementById('edit-rec-fixed-time').value;
-        if(timeVal){
-          var parts = timeVal.split(':');
-          r.timeFixed = {h: parseInt(parts[0]), m: parseInt(parts[1])};
-        }
-        r.durationMinutes = parseInt(document.getElementById('edit-rec-duration').value) || 30;
-        r.anchorEvent = null;
-      } else if(newType==='ancré'){
-        r.anchorEvent = document.getElementById('edit-rec-anchor').value;
-        r.durationMinutes = parseInt(document.getElementById('edit-rec-duration').value) || 30;
-        r.timeFixed = null;
-      } else {
-        r.timeFixed = null;
-        r.anchorEvent = null;
-      }
-      saveData(); renderAgenda();
-    });
-    document.getElementById('edit-rec-cancel').addEventListener('click', function(){ zone.innerHTML=''; });
-  }
 
   // ---- Block modal (replaces prompt()) ----
   var blockModalBackdrop = document.getElementById('block-modal-backdrop');
@@ -3707,6 +3593,11 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     var dow = (copy.getDay()+6)%7; // lundi=0
     copy.setDate(copy.getDate()-dow);
     copy.setHours(0,0,0,0);
+    return copy;
+  }
+  function sundayOf(monday){
+    var copy = new Date(monday);
+    copy.setDate(copy.getDate()+6);
     return copy;
   }
   var viewedWeekStart = mondayOf(new Date());
@@ -4135,11 +4026,39 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   var PILLAR_LABELS_SHORT = {professionnel:'Pro',personnel:'Perso',familial:'Famille',social:'Social'};
   var PILLARS_ORDER = ['professionnel','personnel','familial','social'];
   var HEALTH_DIMS = [
-    {id:'sommeil',label:'Sommeil',icon:'ti-moon',color:'#818CF8'},
-    {id:'activite',label:'Activité physique',icon:'ti-run',color:'#34D399'},
-    {id:'nutrition',label:'Nutrition',icon:'ti-salad',color:'#F97316'},
-    {id:'prevention',label:'Suivi médical',icon:'ti-stethoscope',color:'#EC4899'}
+    {id:'sommeil',label:'Sommeil',icon:'ti-moon',color:'#818CF8',auto:true},
+    {id:'activite',label:'Activité physique',icon:'ti-run',color:'#34D399',auto:true},
+    {id:'nutrition',label:'Nutrition',icon:'ti-salad',color:'#F97316',auto:false},
+    {id:'prevention',label:'Suivi médical',icon:'ti-stethoscope',color:'#EC4899',auto:false}
   ];
+
+  // Calcule automatiquement les dimensions "sommeil" et "activité" depuis le journal réel
+  // (sleepQualityLog / activityLog des 7 derniers jours). Si aucune donnée sur la période,
+  // conserve la dernière valeur connue plutôt que de faire chuter le score à 0.
+  function computeHealthScores(){
+    if(!state.healthScores) state.healthScores = {sommeil:70,activite:70,nutrition:70,prevention:70};
+    var hs = state.healthScores;
+    var last7Keys = [];
+    for(var i=0;i<7;i++){ var d=new Date(); d.setDate(d.getDate()-i); last7Keys.push(dateKey(d)); }
+
+    // Sommeil : moyenne des qualités notées (1-5 → ×20) sur les 7 derniers jours
+    var qualityLog = state.sleepQualityLog || {};
+    var qualities = last7Keys.map(function(k){ return qualityLog[k]; }).filter(function(q){ return typeof q === 'number'; });
+    if(qualities.length){
+      hs.sommeil = Math.round((qualities.reduce(function(s,q){ return s+q; },0)/qualities.length)*20);
+    }
+
+    // Activité : minutes loggées sur 7 jours vs objectif hebdomadaire
+    var last7Set = {}; last7Keys.forEach(function(k){ last7Set[k]=true; });
+    var recentActivity = (state.activityLog||[]).filter(function(a){ return last7Set[a.date]; });
+    if(recentActivity.length){
+      var totalMin = recentActivity.reduce(function(s,a){ return s+(a.durationMinutes||0); },0);
+      var target = state.activityTargetMinutes || 150;
+      hs.activite = Math.min(100, Math.round((totalMin/target)*100));
+    }
+
+    return hs;
+  }
 
   var DEFAULT_PROFILES=[
     {id:'p_actif',name:'Semaine active',icon:'📚',domains:{}},
@@ -4166,6 +4085,15 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     return state.weekProfiles.find(function(p){return p.id===state.activeProfileId;})||state.weekProfiles[0];
   }
 
+  // Garde state.allocations synchronisé sur le profil actif (utilisé par les suggestions de tendance
+  // 14 jours, renderGapObjectives/renderSuggestion) — appelé à chaque changement de profil actif,
+  // pas seulement à la fin du wizard, pour éviter qu'il reste figé sur un profil obsolète.
+  function syncAllocationsFromActiveProfile(){
+    var pcts=profileIdealPercents(activeProfile())||{};
+    if(!state.allocations) state.allocations={};
+    PILLARS_ORDER.forEach(function(p){ state.allocations[p]=pcts[p]||0; });
+  }
+
   function profileHoursPerWeek(profile){
     var h={};
     PILLARS_ORDER.forEach(function(pid){
@@ -4182,6 +4110,93 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     PILLARS_ORDER.forEach(function(pid){p[pid]=Math.round(((hours[pid]||0)/total)*100);});
     return p;
   }
+
+  // L'idéal d'un profil vient en priorité de sa "semaine de référence" (une semaine réellement
+  // vécue et jugée représentative), sinon on retombe sur la configuration manuelle du wizard.
+  function profileIdealPercents(profile){
+    if(profile.referenceWeekMonday){
+      var ref=computeSplitForWeek(new Date(profile.referenceWeekMonday));
+      if(ref) return ref.split;
+    }
+    return hoursToPercents(profileHoursPerWeek(profile));
+  }
+
+  function formatWeekRangeLabel(monday){
+    var sunday=sundayOf(monday);
+    var fmt=function(d){ return pad2(d.getDate())+'/'+pad2(d.getMonth()+1); };
+    return fmt(monday)+' → '+fmt(sunday);
+  }
+
+  // ---- Modale de sélection de la semaine de référence ----
+  function openReferenceWeekModal(profile){
+    var modal=document.getElementById('modal-reference-week');
+    var currentWrap=document.getElementById('reference-week-current');
+    var currentLabel=document.getElementById('reference-week-current-label');
+    var clearBtn=document.getElementById('reference-week-clear');
+    var listEl=document.getElementById('reference-week-list');
+    if(!modal||!listEl) return;
+
+    if(profile.referenceWeekMonday){
+      currentWrap.style.display='block';
+      currentLabel.textContent='Référence actuelle : semaine du '+formatWeekRangeLabel(new Date(profile.referenceWeekMonday));
+      clearBtn.onclick=function(){
+        delete profile.referenceWeekMonday;
+        saveData();
+        closeReferenceWeekModal();
+        renderBalance();
+      };
+    } else {
+      currentWrap.style.display='none';
+    }
+
+    // ~26 dernières semaines complètes avec assez de données (la semaine en cours n'est pas encore terminée)
+    var rows=[];
+    var cursor=mondayOf(new Date());
+    cursor.setDate(cursor.getDate()-7);
+    for(var i=0;i<26;i++){
+      var split=computeSplitForWeek(cursor);
+      if(split) rows.push({monday:new Date(cursor), split:split.split});
+      cursor.setDate(cursor.getDate()-7);
+    }
+
+    if(!rows.length){
+      listEl.innerHTML='<div class="empty-state"><i class="ti ti-calendar-off"></i><p>Pas encore assez de semaines avec des données pour en choisir une comme référence.</p></div>';
+    } else {
+      listEl.innerHTML=rows.map(function(r){
+        var mk=dateKey(r.monday);
+        var isCurrent=profile.referenceWeekMonday===mk;
+        var chips=PILLARS_ORDER.map(function(pid){
+          var pct=r.split[pid]||0; if(!pct) return '';
+          return '<span style="font-size:10.5px;color:'+PILLAR_COLORS[pid]+';">'+pct+'%</span>';
+        }).filter(function(s){return s;}).join(' · ');
+        return '<div class="goal-card" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'+
+          '<div>'+
+            '<div style="font-size:12.5px;color:var(--ink);font-weight:600;">'+formatWeekRangeLabel(r.monday)+'</div>'+
+            '<div style="margin-top:2px;">'+chips+'</div>'+
+          '</div>'+
+          '<button class="btn '+(isCurrent?'primary':'')+' sm" data-refweek="'+mk+'">'+(isCurrent?'Choisie':'Choisir')+'</button>'+
+        '</div>';
+      }).join('');
+      listEl.querySelectorAll('[data-refweek]').forEach(function(btn){
+        btn.addEventListener('click',function(){
+          profile.referenceWeekMonday=btn.dataset.refweek;
+          saveData();
+          closeReferenceWeekModal();
+          renderBalance();
+        });
+      });
+    }
+
+    modal.style.display='flex';
+  }
+
+  function closeReferenceWeekModal(){
+    var modal=document.getElementById('modal-reference-week');
+    if(modal) modal.style.display='none';
+  }
+
+  document.getElementById('reference-week-close').addEventListener('click', closeReferenceWeekModal);
+  document.getElementById('modal-reference-week').addEventListener('click', function(e){ if(e.target===this) closeReferenceWeekModal(); });
 
   function drawPie(svgId,data){
     var svg=document.getElementById(svgId);if(!svg)return;
@@ -4208,21 +4223,39 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
 
   function renderHealthSliders(){
     var wrap=document.getElementById('health-sliders');if(!wrap)return;
-    var hs=state.healthScores||{};
+    var hs=computeHealthScores();
     wrap.innerHTML=HEALTH_DIMS.map(function(d){
       var val=hs[d.id]!==undefined?hs[d.id]:70;
+      var autoNote=d.auto?'<div style="font-size:10.5px;color:var(--ink-faint);margin-top:3px;">Calculé automatiquement depuis ton journal</div>':'';
+      var activityTargetField=(d.id==='activite')?(
+        '<div style="display:flex;align-items:center;gap:6px;margin-top:5px;">'+
+          '<label style="font-size:10.5px;color:var(--ink-faint);" for="activity-target-input">Objectif hebdo</label>'+
+          '<input type="number" id="activity-target-input" min="10" step="10" value="'+(state.activityTargetMinutes||150)+'" style="width:64px;font-size:11px;padding:3px 6px;background:var(--bg-input);border:1px solid var(--card-border);border-radius:6px;color:var(--ink);">'+
+          '<span style="font-size:10.5px;color:var(--ink-faint);">min/sem</span>'+
+        '</div>'
+      ):'';
       return '<div style="margin-bottom:12px;">'+
         '<div style="display:flex;justify-content:space-between;margin-bottom:4px;">'+
           '<span style="font-size:12.5px;color:var(--ink);display:flex;align-items:center;gap:6px;">'+
             '<i class="ti '+d.icon+'" style="color:'+d.color+';font-size:13px;"></i>'+d.label+'</span>'+
           '<span id="hv-'+d.id+'" style="font-size:12.5px;font-weight:600;color:'+d.color+';">'+val+'</span></div>'+
-        '<input type="range" id="hs-'+d.id+'" min="0" max="100" value="'+val+'" style="width:100%;accent-color:'+d.color+';cursor:pointer;height:4px;">'+
+        '<input type="range" id="hs-'+d.id+'" min="0" max="100" value="'+val+'"'+(d.auto?' disabled':'')+' style="width:100%;accent-color:'+d.color+';cursor:'+(d.auto?'default':'pointer')+';height:4px;'+(d.auto?'opacity:0.6;':'')+'">'+
+        autoNote+activityTargetField+
       '</div>';
     }).join('');
     HEALTH_DIMS.forEach(function(d){
+      if(d.auto) return;
       var el=document.getElementById('hs-'+d.id);
       if(el) el.addEventListener('input',function(){var v=document.getElementById('hv-'+d.id);if(v)v.textContent=this.value;});
     });
+    var targetInput=document.getElementById('activity-target-input');
+    if(targetInput){
+      targetInput.addEventListener('change',function(){
+        var v=parseInt(this.value);
+        state.activityTargetMinutes=(v>0)?v:150;
+        saveData(); renderBalance(); renderNow();
+      });
+    }
   }
 
   // ---- WIZARD ----
@@ -4382,8 +4415,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
         var idx=state.weekProfiles.findIndex(function(p){return p.id===wizardProfile.id;});
         if(idx>=0) state.weekProfiles[idx]=wizardProfile; else state.weekProfiles.push(wizardProfile);
         state.activeProfileId=wizardProfile.id;
-        var pcts2=hoursToPercents(profileHoursPerWeek(wizardProfile))||{};
-        PILLARS_ORDER.forEach(function(p){state.allocations[p]=pcts2[p]||0;});
+        syncAllocationsFromActiveProfile();
         saveData(); exitWizard(); renderNow();
       });
     }
@@ -4402,40 +4434,48 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
         return '<button class="profile-tab'+(p.id===state.activeProfileId?' active':'')+'" data-pid="'+p.id+'">'+ escapeHtml(p.icon)+' '+escapeHtml(p.name)+'</button>';
       }).join('');
       tabsEl.querySelectorAll('.profile-tab').forEach(function(btn){
-        btn.addEventListener('click',function(){state.activeProfileId=btn.dataset.pid;saveData();renderBalance();});
+        btn.addEventListener('click',function(){state.activeProfileId=btn.dataset.pid;syncAllocationsFromActiveProfile();saveData();renderBalance();});
       });
     }
     var cfgBtn=document.getElementById('configure-profile-btn');
-    if(cfgBtn){ cfgBtn.innerHTML='⚙️ Configurer "'+escapeHtml(profile.name)+'"'; cfgBtn.onclick=function(){startWizard(profile);}; }
+    if(cfgBtn){ cfgBtn.innerHTML='<i class="ti ti-settings"></i> Configurer'; cfgBtn.onclick=function(){startWizard(profile);}; }
     var addBtn=document.getElementById('add-profile-btn');
     if(addBtn){ addBtn.onclick=function(){
       var name=prompt('Nom du nouveau profil :');if(!name)return;
       var np={id:'p_'+Date.now(),name:name,icon:'⭐',domains:{}};
       state.weekProfiles.push(np);state.activeProfileId=np.id;saveData();startWizard(np);
     };}
+    var refWeekBtn=document.getElementById('reference-week-btn');
+    if(refWeekBtn){ refWeekBtn.onclick=function(){ openReferenceWeekModal(profile); }; }
 
-    // Camemberts
-    var hours=profileHoursPerWeek(profile),pcts=hoursToPercents(hours);
+    // Camemberts — le camembert "idéal" reflète le profil consulté via les onglets (navigation libre)
+    var pcts=profileIdealPercents(profile);
     var idealData=PILLARS_ORDER.map(function(pid){return {pct:pcts?pcts[pid]||0:25,color:PILLAR_COLORS[pid],label:PILLAR_LABELS_SHORT[pid]};});
     drawPie('pie-ideal',idealData); drawLegend('pie-ideal-legend',idealData);
+    var refNoteEl=document.getElementById('reference-week-note');
+    if(refNoteEl) refNoteEl.textContent=profile.referenceWeekMonday?'Basé sur ta semaine du '+formatWeekRangeLabel(new Date(profile.referenceWeekMonday)):'';
     var realResult=computeRealSplit(),realSplit=realResult?realResult.split:{};
     var realData=PILLARS_ORDER.map(function(pid){return {pct:realSplit[pid]||0,color:PILLAR_COLORS[pid],label:PILLAR_LABELS_SHORT[pid]};});
     drawPie('pie-real',realData); drawLegend('pie-real-legend',realData);
 
-    // Score
-    var ideal=pcts||{professionnel:25,personnel:25,familial:25,social:25};
-    var alignScore=realResult?computeAlignmentScore(ideal,realSplit):null;
-    var hs=state.healthScores||{};
-    var healthScore=Math.round(HEALTH_DIMS.reduce(function(s,d){return s+(hs[d.id]||70);},0)/HEALTH_DIMS.length);
-    var boussolScore=alignScore!==null?Math.round(0.6*alignScore+0.4*healthScore):null;
+    // Score — toujours basé sur le profil réellement assigné à la semaine courante (peut différer
+    // de l'onglet consulté ci-dessus), pour rester cohérent entre vue Maintenant et vue Équilibre.
+    var scoreResult=computeBoussoleScore();
+    var ideal=scoreResult.ideal, alignScore=scoreResult.alignScore, healthScore=scoreResult.healthScore, boussolScore=scoreResult.boussolScore;
     var sn=document.getElementById('boussole-score-number'),sd=document.getElementById('boussole-score-detail');
     if(sn){sn.textContent=boussolScore!==null?boussolScore:'—';sn.style.color=boussolScore===null?'var(--ink-faint)':boussolScore>=75?'var(--accent)':boussolScore>=50?'#F59E0B':'#E53E3E';}
-    if(sd){sd.textContent=boussolScore!==null?'Alignement '+alignScore+'/100 · Santé '+healthScore+'/100':'Configure ton profil et pose des blocs cette semaine.';}
+    if(sd){
+      var scoreDetailTxt=boussolScore!==null?'Alignement '+alignScore+'/100 · Santé '+healthScore+'/100':'Configure ton profil et pose des blocs cette semaine.';
+      if(boussolScore!==null && scoreResult.profile.id!==profile.id){
+        scoreDetailTxt+=' · Score calculé avec le profil "'+escapeHtml(scoreResult.profile.name)+'" (assigné à cette semaine)';
+      }
+      sd.textContent=scoreDetailTxt;
+    }
 
-    // Écarts
+    // Écarts (toujours vs le profil de score, cohérent avec le chiffre ci-dessus)
     var ge=document.getElementById('balance-gaps');
     if(ge){
-      if(realResult&&pcts){
+      if(realResult&&scoreResult.hasProfile){
         ge.innerHTML='<p style="font-size:11px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:0.06em;margin:0 0 10px;">Écarts idéal → réel</p>'+
           PILLARS_ORDER.map(function(pid){
             var gap=(realSplit[pid]||0)-(ideal[pid]||0),col=Math.abs(gap)<=5?'var(--accent)':Math.abs(gap)<=15?'#F59E0B':'#E53E3E';
@@ -4446,17 +4486,17 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
           }).join('');
       } else {
         ge.innerHTML='<div style="text-align:center;padding:8px 0;">'+
-          '<p style="font-size:12.5px;color:var(--ink-faint);margin:0 0 10px;">'+(!pcts?"Configure d'abord ton profil ci-dessous.":'Pose des blocs cette semaine pour voir les écarts.')+'</p>'+
-          (!pcts?'<button class="btn sm" id="cfg-first-btn"><i class="ti ti-settings"></i> Configurer mon profil</button>':'')+
+          '<p style="font-size:12.5px;color:var(--ink-faint);margin:0 0 10px;">'+(!scoreResult.hasProfile?"Configure d'abord ton profil ci-dessous.":'Pose des blocs cette semaine pour voir les écarts.')+'</p>'+
+          (!scoreResult.hasProfile?'<button class="btn sm" id="cfg-first-btn"><i class="ti ti-settings"></i> Configurer mon profil</button>':'')+
         '</div>';
-        if(!pcts){ var cfb=document.getElementById('cfg-first-btn'); if(cfb) cfb.onclick=function(){startWizard(profile);}; }
+        if(!scoreResult.hasProfile){ var cfb=document.getElementById('cfg-first-btn'); if(cfb) cfb.onclick=function(){startWizard(scoreResult.profile);}; }
       }
     }
 
     // Conseil
     var ae=document.getElementById('balance-advice');
     if(ae){
-      if(realResult&&pcts){
+      if(realResult&&scoreResult.hasProfile){
         var big=PILLARS_ORDER.map(function(pid){return {pid:pid,gap:(realSplit[pid]||0)-(ideal[pid]||0)};}).sort(function(a,b){return Math.abs(b.gap)-Math.abs(a.gap);})[0];
         ae.textContent=Math.abs(big.gap)<=5?'✅ Tu es bien aligné cette semaine.':big.gap>0?'📊 +'+big.gap+'% sur le '+PILLAR_LABELS_FULL[big.pid].toLowerCase()+' par rapport à ton idéal.':'📊 Déficit de '+Math.abs(big.gap)+'% sur le '+PILLAR_LABELS_FULL[big.pid].toLowerCase()+'.';
         ae.style.display='';
@@ -4464,11 +4504,12 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     }
 
     // Santé
+    var hs=scoreResult.healthDims;
     renderHealthSliders();
     var shb=document.getElementById('health-save-btn');
     if(shb){ shb.onclick=function(){
       if(!state.healthScores) state.healthScores={};
-      HEALTH_DIMS.forEach(function(d){state.healthScores[d.id]=parseInt(document.getElementById('hs-'+d.id).value)||70;});
+      HEALTH_DIMS.forEach(function(d){ if(!d.auto) state.healthScores[d.id]=parseInt(document.getElementById('hs-'+d.id).value)||70; });
       saveData();renderBalance();renderNow();
       shb.innerHTML='<i class="ti ti-check"></i> Enregistré ✓';
       setTimeout(function(){shb.innerHTML='<i class="ti ti-check"></i> Enregistrer';},1500);
@@ -4478,12 +4519,12 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     drawPie('pie-health',hData);drawLegend('pie-health-legend',hData);
   }
 
-  function computeRealSplit(){
-    var monday=mondayOf(new Date()),mondayKey=dateKey(monday),todayK=todayKey;
+  // Répartition réelle par pilier sur un intervalle de dates [startKey, endKey] inclus (hors sommeil/déjeuner)
+  function computeSplitForRange(startKey,endKey){
     var minutesByPillar={};
     state.blocks.forEach(function(b){
       if(!b.date||b.isSleepBlock||b.isLunchBlock)return;
-      if(b.date<mondayKey||b.date>todayK)return;
+      if(b.date<startKey||b.date>endKey)return;
       var pid=b.pillarId||'personnel';
       minutesByPillar[pid]=(minutesByPillar[pid]||0)+durationMinutes(b);
     });
@@ -4494,9 +4535,50 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     return {split:split,totalMinutes:total};
   }
 
+  function computeRealSplit(){
+    var monday=mondayOf(new Date());
+    return computeSplitForRange(dateKey(monday),todayKey);
+  }
+
+  // Répartition réelle sur une semaine complète passée (lundi → dimanche), utilisée pour dériver
+  // l'idéal d'un profil depuis une "semaine de référence" réellement vécue.
+  function computeSplitForWeek(monday){
+    return computeSplitForRange(dateKey(monday),dateKey(sundayOf(monday)));
+  }
+
   function computeAlignmentScore(ideal,real){
     var totalGap=PILLARS_ORDER.reduce(function(sum,pid){return sum+Math.abs((ideal[pid]||0)-(real[pid]||0));},0);
     return Math.max(0,Math.round(100-totalGap/2));
+  }
+
+  // Le profil "idéal" d'une semaine suit l'assignation faite dans la vue Année
+  // (state.weekTypeAssignments) ; à défaut, retombe sur le profil actif sélectionné à la main.
+  function resolveWeekProfile(monday){
+    ensureProfiles();
+    var assignedId = (state.weekTypeAssignments||{})[dateKey(monday)];
+    var assigned = assignedId ? state.weekProfiles.find(function(p){ return p.id===assignedId; }) : null;
+    return assigned || activeProfile();
+  }
+
+  // Point d'entrée unique du Score Boussole — remplace les calculs dupliqués qui existaient
+  // séparément dans la vue Maintenant et la vue Équilibre (source de désynchronisation).
+  function computeBoussoleScore(){
+    var monday = mondayOf(new Date());
+    var profile = resolveWeekProfile(monday);
+    var pcts = profileIdealPercents(profile);
+    var ideal = pcts || {professionnel:25,personnel:25,familial:25,social:25};
+    var realResult = computeRealSplit();
+    var realSplit = realResult ? realResult.split : {};
+    var alignScore = realResult ? computeAlignmentScore(ideal, realSplit) : null;
+    var healthDims = computeHealthScores();
+    var healthScore = Math.round(HEALTH_DIMS.reduce(function(s,d){ return s+(healthDims[d.id]||70); },0)/HEALTH_DIMS.length);
+    var boussolScore = alignScore!==null ? Math.round(0.6*alignScore + 0.4*healthScore) : null;
+    return {
+      profile: profile, hasProfile: !!pcts,
+      ideal: ideal, real: realSplit, realResult: realResult,
+      alignScore: alignScore, healthScore: healthScore, healthDims: healthDims,
+      boussolScore: boussolScore
+    };
   }
 
   // ============ RENDER: FOUNDATIONS ============
@@ -4986,7 +5068,8 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     '2days': { label: 'Dans 2 jours',  cls: 'urgency-2days',  order: 2, color: '#FBBF24', short: '🗓 2j' },
     'week':  { label: 'Cette semaine', cls: 'urgency-week',   order: 3, color: '#6EBF8B', short: '📆 Semaine' },
     'month': { label: 'Ce mois',       cls: 'urgency-month',  order: 4, color: '#60A5FA', short: '📊 Mois' },
-    'custom':{ label: 'Date précise',  cls: 'urgency-custom', order: 5, color: '#A78BFA', short: '📍 Date…' }
+    'custom':{ label: 'Date précise',  cls: 'urgency-custom', order: 5, color: '#A78BFA', short: '📍 Date…' },
+    'note':  { label: '📝 Notes',      cls: 'urgency-note',   order: 6, color: '#94A3B8', short: '📝 Note' }
   };
   var _taskUrg = 'week';
 
@@ -5149,10 +5232,11 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
       .slice(0,5);
     if(!todos.length&&!dones.length){
       wrap.innerHTML='<p class="found-hint" style="text-align:center;margin-top:30px;">Aucune tâche. Ajoute ta première tâche ci-dessus.</p>';
+      renderRoutinesSection();
       return;
     }
     var html='';
-    var groups={},gOrder=['hour','day','2days','week','month','custom'];
+    var groups={},gOrder=['hour','day','2days','week','month','custom','note'];
     todos.forEach(function(t){var u=t.urgency||'week';if(!groups[u])groups[u]=[];groups[u].push(t);});
     gOrder.forEach(function(u){
       if(!groups[u]||!groups[u].length) return;
@@ -5167,6 +5251,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     }
     wrap.innerHTML=html;
     attachTaskListeners(wrap);
+    renderRoutinesSection();
   }
 
   function renderTaskItem(t,groupArr,groupIdx){
@@ -5279,6 +5364,90 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
           saveData(); renderTasks();
         });
         item.querySelector('#edit-task-cancel').addEventListener('click',function(){renderTasks();});
+      });
+    });
+  }
+
+  // ============ ROUTINES (section dans view-tasks) ============
+  var routineModalBackdrop = document.getElementById('routine-modal-backdrop');
+  var routineTextInput = document.getElementById('routine-text-input');
+  var routineFreqCount = document.getElementById('routine-freq-count');
+  var addRoutineBtn = document.getElementById('add-routine-btn');
+
+  function openRoutineModal(){
+    routineTextInput.value = '';
+    routineFreqCount.value = 1;
+    routineModalBackdrop.style.display = 'flex';
+    routineTextInput.focus();
+  }
+  function closeRoutineModal(){
+    routineModalBackdrop.style.display = 'none';
+  }
+  addRoutineBtn.addEventListener('click', openRoutineModal);
+  document.getElementById('routine-cancel-btn').addEventListener('click', closeRoutineModal);
+  // Clic sur le fond (en dehors de la carte) : ferme, comme le bouton Annuler.
+  routineModalBackdrop.addEventListener('click', function(e){
+    if(e.target === routineModalBackdrop) closeRoutineModal();
+  });
+  document.addEventListener('keydown', function(e){
+    if(e.key==='Escape' && routineModalBackdrop.style.display !== 'none') closeRoutineModal();
+  });
+
+  function saveRoutine(){
+    var text = routineTextInput.value.trim();
+    if(!text) return;
+    var det = detectPillar(text);
+    var countRaw = parseInt(routineFreqCount.value);
+    var unitVal = document.getElementById('routine-freq-unit').value || 'day';
+    state.recurring.push({
+      id: generateId('r'),
+      text: text,
+      pillarId: det.pillar || 'personnel',
+      type: 'libre',
+      frequency: {count: (isNaN(countRaw)||countRaw<1) ? 1 : countRaw, unit: unitVal}
+    });
+    saveData();
+    closeRoutineModal();
+    renderRoutinesSection();
+  }
+  document.getElementById('routine-save-btn').addEventListener('click', saveRoutine);
+
+  // Liste "à faire aujourd'hui" : routines dont l'id n'est pas encore dans le log du jour routine
+  // courant. Pas de badge d'urgence, pas de tri par priorité — juste une liste à cocher.
+  function renderRoutinesSection(){
+    var wrap = document.getElementById('routines-section');
+    if(!wrap) return;
+    var key = routineDayKey(Date.now());
+    var log = state.recurringLog[key] || [];
+    var todo = state.recurring.filter(function(r){ return log.indexOf(r.id)===-1; });
+    if(!todo.length){
+      wrap.innerHTML = '';
+      return;
+    }
+    var html = '<div class="tasks-group-label" style="margin-top:24px;">Routines</div>';
+    html += todo.map(function(r){
+      return '<div class="rec-item" data-routineid="'+r.id+'">'+
+        '<div class="rec-check" data-checkroutine="'+r.id+'"></div>'+
+        '<div style="flex:1;">'+escapeHtml(r.text)+'</div>'+
+        '<div class="item-del" data-delroutine="'+r.id+'">'+svgIcon('trash',16)+'</div>'+
+      '</div>';
+    }).join('');
+    wrap.innerHTML = html;
+    wrap.querySelectorAll('[data-checkroutine]').forEach(function(el){
+      el.addEventListener('click', function(){
+        var id = el.dataset.checkroutine;
+        var k = routineDayKey(Date.now());
+        if(!state.recurringLog[k]) state.recurringLog[k] = [];
+        if(state.recurringLog[k].indexOf(id)===-1) state.recurringLog[k].push(id);
+        saveData();
+        renderRoutinesSection();
+      });
+    });
+    wrap.querySelectorAll('[data-delroutine]').forEach(function(el){
+      el.addEventListener('click', function(e){
+        e.stopPropagation();
+        var r = findItem(state.recurring, {id: el.dataset.delroutine});
+        deleteWithUndo(function(){ return state.recurring; }, el.dataset.delroutine, r?r.text:'routine', [renderRoutinesSection]);
       });
     });
   }
@@ -6690,6 +6859,8 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   var _geoPendingGap = null;   // {start, end, suggestedPillar} en attente de réponse — voir _fillLocationGap()
   var _geoOpts          = { enableHighAccuracy: false, timeout: 10000, maximumAge: 30000 };
   var _geoOptsTransit    = { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 };
+  var GEO_ACCURACY_IGNORE_THRESHOLD = 500; // mètres, position trop imprécise pour être utilisée
+  var GEO_MOVE_ACCURACY_MARGIN = 1.5;      // un déplacement n'est retenu que s'il dépasse accuracy * ce facteur
   var _ongoingGeoBlockId = null; // ID du bloc géo actuellement "en cours" — étendu à chaque check GPS
 
   // ---- Wake Lock : empêche l'écran de s'éteindre pendant un trajet actif détecté ----
@@ -6912,7 +7083,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   }
 
   // ---- Création bloc ----
-  function createGeoBlock(name, pillarId) {
+  function createGeoBlock(name, pillarId, locId) {
     var startMs = _geo.anchorTime || (Date.now() - 5 * 60000);
     // Si réveil connu aujourd'hui et postérieur à l'ancre → démarrer au réveil
     var wakeMs = _getWakeTimeMs();
@@ -6929,6 +7100,10 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     });
     _geo.prompted = true;
     saveGeoAnchor();
+    if (locId) {
+      var loc = findItem(state.knownLocations, {id: locId});
+      if (loc) loc.visitCount = (loc.visitCount || 0) + 1;
+    }
     saveData();
     renderAgenda();
     switchToView('today');
@@ -6981,13 +7156,20 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
       closeGeoModal();
       return;
     }
+    var locId;
     if (_geoSaveCheck.checked && _pendingGeoLat !== null) {
       if (!state.knownLocations) state.knownLocations = [];
       var existing = findKnownLocation(_pendingGeoLat, _pendingGeoLng);
-      if (existing) { existing.name = name; existing.pillarId = pillar; }
-      else state.knownLocations.push({ id: 'loc_' + Date.now(), name: name, lat: _pendingGeoLat, lng: _pendingGeoLng, pillarId: pillar });
+      if (existing) { existing.name = name; existing.pillarId = pillar; locId = existing.id; }
+      else {
+        // visitCount part de 0 : la visite en cours est comptée par l'incrément de createGeoBlock()
+        // juste après (donc 1 au final), pour ne pas compter deux fois la même confirmation.
+        var newLoc = { id: generateId('loc'), name: name, lat: _pendingGeoLat, lng: _pendingGeoLng, pillarId: pillar, visitCount: 0 };
+        state.knownLocations.push(newLoc);
+        locId = newLoc.id;
+      }
     }
-    createGeoBlock(name, pillar);
+    createGeoBlock(name, pillar, locId);
     closeGeoModal();
   });
   document.getElementById('geo-empty-btn').addEventListener('click', function() {
@@ -7033,7 +7215,12 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   // ---- Logique principale ----
   function onGeoPosition(pos) {
     var lat = pos.coords.latitude, lng = pos.coords.longitude;
+    var accuracy = pos.coords.accuracy;
     var now = Date.now();
+
+    // Relevé trop imprécis pour être exploité : on l'ignore complètement, comme s'il n'était
+    // jamais arrivé (ni _prevPos, ni _geo, ni aucun state touché).
+    if (typeof accuracy === 'number' && accuracy > GEO_ACCURACY_IGNORE_THRESHOLD) return;
 
     // Un trou est en attente de réponse dans le bandeau : ne rien évaluer de plus tant que
     // l'utilisateur n'a pas qualifié la période (sinon on risquerait de rouvrir un second
@@ -7050,7 +7237,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
       var moveDist = haversineM(lat, lng, _prevPos.lat, _prevPos.lng);
       var moveMinutes = (now - _prevPos.time) / 60000;
 
-      if (!_inTransit && moveDist > 300 && moveMinutes <= 5) {
+      if (!_inTransit && moveDist > Math.max(300, accuracy * GEO_MOVE_ACCURACY_MARGIN) && moveMinutes <= 5) {
         // Départ rapide détecté → passage en mode transit
         _inTransit = true;
         _stableAtDest = 0;
@@ -7074,7 +7261,10 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
             _prevPos = {lat: lat, lng: lng, time: now};
             // Vérifier si lieu connu à destination
             var knownDest = findKnownLocation(lat, lng);
-            if (knownDest) { createGeoBlock(knownDest.name, knownDest.pillarId); }
+            if (knownDest) {
+              if (knownDest.visitCount >= TRUSTED_VISIT_THRESHOLD) { createGeoBlock(knownDest.name, knownDest.pillarId, knownDest.id); }
+              else { openGeoModal(lat, lng, knownDest.name); }
+            }
             else { reverseGeocode(lat, lng, function(name) { openGeoModal(lat, lng, name); }); }
             return;
           }
@@ -7093,7 +7283,7 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
       saveGeoAnchor(); return;
     }
     var distFromAnchor = haversineM(lat, lng, _geo.anchorLat, _geo.anchorLng);
-    if (distFromAnchor > 400) {
+    if (distFromAnchor > Math.max(400, accuracy * GEO_MOVE_ACCURACY_MARGIN)) {
       // Déplacement significatif sans transit rapide détecté (marche lente, ou trou de suivi
       // pendant une mise en arrière-plan) : on ne considère plus être sur le lieu précédent,
       // même si aucun "trajet" n'a été détecté entre-temps — sinon le bloc en cours continue
@@ -7106,7 +7296,10 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
     var secSinceAnchor = Math.round((now - _geo.anchorTime) / 1000);
     if (secSinceAnchor >= 5 * 60 && !_geo.prompted) {
       var known = findKnownLocation(lat, lng);
-      if (known) { createGeoBlock(known.name, known.pillarId); }
+      if (known) {
+        if (known.visitCount >= TRUSTED_VISIT_THRESHOLD) { createGeoBlock(known.name, known.pillarId, known.id); }
+        else { openGeoModal(lat, lng, known.name); }
+      }
       else { reverseGeocode(lat, lng, function(name) { openGeoModal(lat, lng, name); }); }
     }
 
@@ -7334,7 +7527,8 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
       var existing = findItem(state.knownLocations, {id: id});
       if(existing){ existing.name = name; existing.pillarId = pillar; existing.lat = _locPending.lat; existing.lng = _locPending.lng; }
     } else {
-      state.knownLocations.push({ id: 'loc_'+Date.now(), name: name, lat: _locPending.lat, lng: _locPending.lng, pillarId: pillar });
+      // Ajout manuel = geste de confiance explicite : pas de période de confirmation à traverser.
+      state.knownLocations.push({ id: generateId('loc'), name: name, lat: _locPending.lat, lng: _locPending.lng, pillarId: pillar, visitCount: TRUSTED_VISIT_THRESHOLD });
     }
     saveData();
     document.getElementById('location-form-card').style.display = 'none';
@@ -7437,7 +7631,6 @@ border:1px solid var(--card-border);background:var(--bg-input);color:var(--ink-d
   requestNotifPermission();
   try { checkSleepDetection(); } catch(e) {}
 })();
-
 </script>
 </body>
 </html>

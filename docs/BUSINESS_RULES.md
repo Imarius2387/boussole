@@ -29,7 +29,7 @@ Ces couleurs sont utilisées dans les camemberts, les blocs agenda, les badges, 
 
 ## 2. Tâches
 
-### 2.1 Niveaux d'urgence (5 niveaux fixes)
+### 2.1 Niveaux d'urgence (7 niveaux fixes)
 | Code | Label | Couleur | Signification |
 |------|-------|---------|---------------|
 | `hour` | Dans l'heure | #F87171 (rouge) | Action immédiate requise |
@@ -37,8 +37,10 @@ Ces couleurs sont utilisées dans les camemberts, les blocs agenda, les badges, 
 | `2days` | Dans 2 jours | #FBBF24 (jaune) | Priorité haute mais pas urgente |
 | `week` | Cette semaine | #6EBF8B (vert) | À traiter dans la semaine |
 | `month` | Ce mois | #60A5FA (bleu) | Objectif mensuel |
+| `custom` | Date précise | #A78BFA (violet) | Délai ou date/heure choisis explicitement |
+| `note` | 📝 Notes | #94A3B8 (gris) | Sans échéance — pense-bête, pas une action datée |
 
-**Règle :** Il n'existe pas de 6e niveau. Si une tâche dépasse le mois, c'est un objectif (`goals`), pas une tâche.
+**Règle :** ces 7 niveaux sont fixes (`URGENCY_LABELS` dans `app.js`). Si une tâche dépasse le mois avec une échéance réelle, c'est un objectif (`goals`), pas une tâche — mais `custom` et `note` restent des tâches, pas des objectifs : `custom` sert une date précise (au-delà d'un mois y compris), `note` sert l'absence totale d'échéance.
 
 ### 2.2 Statuts
 - `todo` — à faire

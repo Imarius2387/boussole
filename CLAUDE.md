@@ -14,6 +14,7 @@ Disponibles sur demande (lire si le contexte le nécessite) :
 - `docs/LIFE_BALANCE_ENGINE.md` — piliers, profils de semaine, camemberts, score alignement
 - `docs/PRODUCT_VISION.md` — identité produit, utilisateur cible, philosophie
 - `docs/ROADMAP.md` — backlog, priorités, choix de modèle IA par tâche
+- Avant de lire des fichiers, consulte d'abord graphify-out/graph.json pour comprendre la structure et ne lire que le strict nécessaire
 
 ## Identité
 
@@ -118,7 +119,8 @@ state = {
     type: 'libre|fixe|ancré',           // défaut: 'libre'
     timeFixed: {h:8, m:0},              // si type='fixe'
     anchorEvent: 'wake|after_lunch|before_sleep', // si type='ancré'
-    durationMinutes: 30
+    durationMinutes: 30,
+    frequency: {count: 1, unit: 'day'}  // 'day' = seule unité existante actuellement
   }],
   recurringLog: { 'YYYY-MM-DD': ['r_id1', 'r_id2'] }, // routines cochées
 
@@ -162,10 +164,10 @@ Ordre de la barre principale :
 3. **Aujourd'hui** (`view-today`)
 4. **Semaine** (`view-week`)
 5. **Tâches** (`view-list` → hub → `view-tasks` / `view-goals`)
-6. **Plus** (`view-more`) → Année, Projets, Finances, Fondations, Suivi santé, Suivi sommeil, Aide
+6. **Plus** (`view-more`) → Année, Projets, Finances, Fondations, Suivi santé, Suivi sommeil, Mes lieux, Aide
 
 Vues secondaires (activées depuis le menu Plus) :
-`year`, `goals`, `projects`, `finance`, `balance`, `foundations`, `medical`, `help`, `sleep-tracking`, `tasks`
+`year`, `goals`, `projects`, `finance`, `balance`, `foundations`, `medical`, `help`, `sleep-tracking`, `tasks`, `locations`
 
 ---
 
@@ -192,7 +194,11 @@ Vues secondaires (activées depuis le menu Plus) :
 | `hoursToPercents(hours)` | Convertit des heures en pourcentages |
 | `drawPie(svgId, data)` | Dessine un camembert SVG |
 | `loadJournal()` | Charge le journal du jour affiché |
-| `recurringEffectiveStartMin(r, dayBlocks)` | Heure effective d'une routine selon son type |
+| `recurringEffectiveStartMin(r, dayBlocks)` | Heure effective d'une routine selon son type (non branchée dans l'UI actuellement) |
+| `quickCaptureAdd(text)` | Capture rapide (`#capture-input`, écran Maintenant) — NLP léger : bloc agenda direct si date+heure détectées, modale de clarification si jour ou intention d'objectif détectés, sinon tâche simple. Anciennement nommée `addTask`, renommée pour éliminer une collision de nom avec `addTask()` de la vue Tâches |
+| `routineDayKey(date)` | Clé de "jour routine" — reset à 6h du matin, pas minuit (voir section Routines) |
+| `saveRoutine()` | Création d'une routine depuis la modale (`#routine-modal-backdrop`) |
+| `renderRoutinesSection()` | Rend la liste des routines "à faire aujourd'hui" dans `view-tasks`, appelée à la fin de `renderTasks()` |
 
 ---
 
@@ -300,7 +306,64 @@ social:        '#EC4899'  // rose
 .urgency-2days { color: #FBBF24 }  /* jaune  — dans 2 jours */
 .urgency-week  { color: #6EBF8B }  /* vert   — cette semaine */
 .urgency-month { color: #60A5FA }  /* bleu   — ce mois */
+.urgency-custom{ color: #A78BFA }  /* violet — date précise */
+.urgency-note  { color: #94A3B8 }  /* gris   — note, sans échéance */
 ```
+
+---
+
+## Géolocalisation
+
+Module actif depuis le commit `a28a32e` (2026-07-01), jamais documenté jusqu'ici — état constaté du code réel, pas une conception nouvelle.
+
+### État
+```js
+state.knownLocations = [{ id, name, lat, lng, pillarId, visitCount }]
+state.geoTrackingEnabled = true  // toujours à true en pratique : aucun réglage UI pour le désactiver
+```
+
+### Fonctions principales
+| Fonction | Rôle |
+|---|---|
+| `geoCheck()` | Demande la position au navigateur (`getCurrentPosition`), appelée toutes les 60s (15s en trajet détecté) |
+| `onGeoPosition(pos)` | Cœur de la logique : détection de trajet, gestion d'ancre, déclenche confirmation ou création de bloc |
+| `findKnownLocation(lat, lng)` | Cherche un lieu connu à ≤500m (rayon fixe, indépendant de tout paramètre par lieu) |
+| `createGeoBlock(name, pillarId, locId)` | Crée un bloc agenda depuis un lieu détecté ; incrémente `visitCount` du lieu si `locId` fourni |
+
+### Constantes de confiance
+- `TRUSTED_VISIT_THRESHOLD = 5` — nombre de visites confirmées à partir duquel un lieu connu déclenche la création automatique d'un bloc ; en dessous, retour au flux de confirmation (bannière pré-remplie, un clic)
+- `GEO_ACCURACY_IGNORE_THRESHOLD = 500` — mètres ; un relevé GPS moins précis que ça est ignoré intégralement (ni `_prevPos`, ni `_geo`, ni aucun state touché)
+- `GEO_MOVE_ACCURACY_MARGIN = 1.5` — un déplacement (trajet ou reset d'ancre) n'est retenu que s'il dépasse `accuracy × ce facteur`, pour éviter qu'un pic d'imprécision GPS soit interprété comme un vrai déplacement
+
+### Dépendances externes — exception à la règle "zéro dépendance"
+Contrairement à la contrainte de stack (section 1.1), ce module appelle deux services externes, actifs et utilisés en production :
+- **Nominatim** (OpenStreetMap) — géocodage inverse (nom de lieu depuis lat/lng) et recherche d'adresse, via `fetch` direct
+- **Leaflet** (CDN cdnjs, avec intégrité SRI) — carte interactive dans la vue "Mes lieux" (`view-locations`) pour placer un lieu manuellement
+
+---
+
+## Routines
+
+### Structure
+```js
+state.recurring = [{
+  id, text, pillarId, type: 'libre',   // seul 'libre' est créé aujourd'hui via l'UI
+  frequency: {count: 1, unit: 'day'}    // 'day' = seule unité existante ; select gardé extensible côté HTML
+}]
+state.recurringLog = { 'YYYY-MM-DD' (clé "jour routine") : ['r_id1', 'r_id2'] }  // routines cochées ce jour-là
+```
+
+### `routineDayKey(date)`
+Point d'entrée unique pour la clé de "jour routine" — **reset à 6h du matin, pas à minuit** : une routine cochée à 1h du matin compte pour la veille (le "jour routine" en cours), pas pour le nouveau jour civil. Jamais recalculée inline ailleurs — toujours passer par cette fonction pour associer une action à un jour routine.
+
+### Flux de création
+Bouton "+ Ajouter une routine" (entre `#task-capture-wrap` et `#tasks-list`, vue Tâches) → modale (`#routine-modal-backdrop`, fermeture par Annuler / clic backdrop / Escape) → `saveRoutine()` : `pillarId` détecté automatiquement (`detectPillar(text)`, même mécanisme que les tâches), pas de sélection manuelle de pilier.
+
+### Affichage
+`renderRoutinesSection()` liste, dans `view-tasks` sous `#tasks-list`, les routines dont l'id n'est pas encore dans `recurringLog[routineDayKey(Date.now())]` — pas de badge d'urgence, pas de tri par priorité. Cocher une routine l'ajoute au log et la fait disparaître immédiatement de la liste (jusqu'au prochain jour routine).
+
+### Ancien système retiré
+Une première tentative d'UI (formulaire `#recurring-form`, affichage dans l'agenda) a été supprimée : le HTML correspondant n'a jamais existé dans `index.html`, le code JS était mort depuis le premier commit du dépôt. `recurringEffectiveStartMin(r, dayBlocks)` (heure effective selon `type: 'fixe'|'ancré'`) est conservée telle quelle en vue d'une réutilisation future, mais n'est appelée par rien actuellement.
 
 ---
 
@@ -313,6 +376,11 @@ Lors du chargement (`loadData()`), plusieurs migrations sont appliquées :
 - `weekProfiles` absent → 3 profils par défaut créés
 - `weekTypeAssignments` absent → `{}`
 - `healthScores` absent → `{sommeil:70, activite:70, nutrition:70, prevention:70}`
+- `recurring`/`recurringLog` absents → `[]`/`{}` (garde défensive, absente jusqu'à récemment)
+- `recurring` sans `frequency` → `{count:1, unit:'day'}` (comportement quotidien implicite déjà en vigueur, donc pas un changement observable)
+- `knownLocations` sans `visitCount` → `TRUSTED_VISIT_THRESHOLD` (pas 0, pour ne pas faire retomber des lieux déjà fiables dans le flux de confirmation — voir section Géolocalisation)
+
+Les migrations les plus récentes sont numérotées (`// MIGRATION N`) dans `loadData()` ; les plus anciennes listées ci-dessus ne le sont pas — numérotation introduite progressivement, pas de renumérotation rétroactive.
 
 ---
 
@@ -331,7 +399,7 @@ Lors du chargement (`loadData()`), plusieurs migrations sont appliquées :
 
 ### Décisions actées (ne pas revenir dessus sans raison)
 - Pas de framework JS — rester en vanilla pour la portabilité
-- Pas de score sur les tâches — urgence uniquement (5 niveaux)
+- Pas de score sur les tâches — urgence uniquement (7 niveaux, voir section Badges d'urgence)
 - Court terme = tasks, pas goals
 - Bornes des plages horaires FIXES (6/12/14/18/0h)
 - Le coucher reste TOUJOURS sur viewedDate, même si l'heure dépasse minuit
@@ -350,3 +418,4 @@ node --check app.js
 # Taille du projet
 wc -l app.js style.css index.html
 ```
+
